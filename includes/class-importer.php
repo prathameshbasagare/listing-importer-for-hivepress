@@ -385,14 +385,47 @@ class Importer {
 			$save_fields = array_keys( $field_values );
 			$save_fields = array_merge( $save_fields, [ 'title', 'description', 'user', 'status', 'categories', 'featured', 'verified' ] );
 
-			if ( ! $listing->save( array_unique( $save_fields ) ) ) {
+if ( ! $listing->save( array_unique( $save_fields ) ) ) {
 				$stats['failed']++;
 				$errs = $listing->_get_errors();
 				$stats['errors'][ $row_index ][] = ! empty( $errs ) ? implode( '; ', $errs ) : __( 'Failed to save listing record.', 'pb-hivepress-import' );
 				continue;
 			}
 
-			// Process Images with Smart MIME Sideloading
+			// Process Custom HivePress Attributes
+			foreach ( $field_values as $key => $val ) {
+				if ( in_array( $key, [ 'title', 'description', 'id', 'user', 'images', 'categories', 'featured', 'verified' ], true ) ) {
+					continue;
+				}
+
+				if ( ! isset( $mappable_fields[ $key ] ) ) {
+					// Save unrecognized fields as post meta instead of skipping
+					update_post_meta( $listing->get_id(), 'hp_import_' . $key, sanitize_text_field( $val ) );
+					continue;
+				}
+
+				$field_def = $mappable_fields[ $key ];
+				$field_obj = isset( $field_def['field_obj'] ) ? $field_def['field_obj'] : null;
+
+				if ( $field_obj && is_array( $field_obj->get_arg( 'options' ) ) ) {
+					// Select / Multi-Select
+					$matched_options = [];
+					$labels = array_filter( array_map( 'trim', explode( ',', $val ) ) );
+					foreach ( $field_obj->get_arg( 'options' ) as $opt_name => $opt_label ) {
+						$opt_label_text = is_array( $opt_label ) && isset( $opt_label['label'] ) ? $opt_label['label'] : (string) $opt_label;
+						if ( in_array( html_entity_decode( $opt_label_text ), $labels, true ) || in_array( (string) $opt_name, $labels, true ) ) {
+							$matched_options[] = $opt_name;
+						}
+					}
+					if ( $field_obj->is_multiple() ) {
+						$listing->set_value( $key, $matched_options );
+					} elseif ( ! empty( $matched_options ) ) {
+						$listing->set_value( $key, $matched_options[0] );
+					}
+				} else {
+					$listing->set_value( $key, sanitize_text_field( $val ) );
+				}
+			}
 			if ( ! empty( $field_values['images'] ) ) {
 				$img_urls = array_filter( array_map( 'trim', explode( ',', $field_values['images'] ) ) );
 				$downloaded_attachment_ids = [];
