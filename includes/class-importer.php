@@ -97,7 +97,7 @@ class Importer {
 		$fields['description'] = [
 			'label'       => __( 'Description', 'hivepress' ),
 			'description' => __( 'The full text content or description of the listing.', 'hivepress' ),
-			'required'    => false,
+			'required'    => true,
 			'_order'      => 40,
 		];
 

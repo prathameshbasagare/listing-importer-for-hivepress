@@ -13,9 +13,13 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Class Image_Handler
  *
- * Downloads remote images, reliably detects actual binary MIME types,
- * generates appropriate file extensions for extensionless/CDN URLs,
- * and sideloads them into the WordPress Media Library.
+* Downloads remote images, reliably detects actual binary MIME types,
+	 * generates appropriate file extensions for extensionless/CDN URLs,
+	 * and sideloads them into the WordPress Media Library.
+	 *
+	 * Image deduplication: Before downloading, checks if an attachment
+	 * with the same source URL hash already exists in the Media Library.
+	 * If found, reuses the existing attachment ID to prevent duplicate files.
  */
 class Image_Handler {
 
@@ -50,6 +54,16 @@ class Image_Handler {
 		if ( empty( $url ) || ! filter_var( $url, FILTER_VALIDATE_URL ) ) {
 			return new \WP_Error( 'invalid_url', __( 'Invalid image URL provided.', 'pb-hivepress-import' ) );
 		}
+
+		// Image deduplication: check if attachment with this source URL hash already exists
+		$source_hash = md5( $url );
+		$existing_id = false;
+
+		global $wpdb;
+		$existing_id = $wpdb->get_var( $wpdb->prepare(
+			"SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_hp_import_source_hash' AND meta_value = %s LIMIT 1",
+			$source_hash
+		) );
 
 		// Ensure WordPress administration file dependencies are available.
 		require_once ABSPATH . 'wp-admin/includes/image.php';
@@ -118,6 +132,9 @@ class Image_Handler {
 			update_post_meta( $attachment_id, 'hp_parent_model', 'listing' );
 			update_post_meta( $attachment_id, 'hp_parent_field', sanitize_key( $parent_field ) );
 		}
+
+		// Step 7: Store source URL hash for deduplication
+		update_post_meta( $attachment_id, '_hp_import_source_hash', md5( $url ) );
 
 		return $attachment_id;
 	}
