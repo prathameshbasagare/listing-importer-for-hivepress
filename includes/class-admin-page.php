@@ -153,6 +153,39 @@ class Admin_Page {
 			wp_safe_redirect( admin_url( 'edit.php?post_type=hp_listing&page=' . self::PAGE_SLUG . '&step=3' ) );
 			exit;
 		}
+
+		// Action 3: AJAX Batch Chunk Processing (Step 2 -> Progress)
+		if ( ! empty( $_POST['hp_pb_ajax_nonce'] ) && wp_verify_nonce( sanitize_key( $_POST['hp_pb_ajax_nonce'] ), 'hp_pb_ajax_action' ) ) {
+			$session = get_transient( 'hp_import_session_' . get_current_user_id() );
+			if ( ! $session || ! file_exists( $session['file_path'] ) ) {
+				wp_send_json_error( [ 'message' => 'Upload session expired' ] );
+				wp_die();
+			}
+
+			$chunk_size = ! empty( $_POST['chunk_size'] ) ? absint( $_POST['chunk_size'] ) : 10;
+			$start_row  = ! empty( $_POST['start_row'] ) ? absint( $_POST['start_row'] ) : 1;
+
+			$result = Importer::process_chunk( [
+				'file_path'   => $session['file_path'],
+				'delimiter'   => $session['delimiter'],
+				'mode'        => $session['mode'],
+				'category_id' => $session['category_id'],
+				'mappings'    => ! empty( $_POST['mapping'] ) ? $_POST['mapping'] : [],
+				'start_row'   => $start_row,
+				'chunk_size'  => $chunk_size,
+			] );
+
+			// Update session with new progress
+			$session['current_row'] = $result['current_row'];
+			$session['total_rows']  = $result['total_rows'];
+			$session['created']     = $result['created'] + ( $session['created'] ?? 0 );
+			$session['updated']     = $result['updated'] + ( $session['updated'] ?? 0 );
+			$session['failed']      = $result['failed'] + ( $session['failed'] ?? 0 );
+			set_transient( 'hp_import_session_' . get_current_user_id(), $session, HOUR_IN_SECONDS );
+
+			wp_send_json_success( $result );
+			wp_die();
+		}
 	}
 
 	/**
