@@ -150,9 +150,11 @@ class Image_Handler {
 	 * attached to the given post.
 	 *
 	 * HivePress links gallery images one-to-many via post_parent, so an attachment
-	 * still owned by another live post is not reused (that would remove it from
-	 * that post). Attachments that are unattached, already on this post, or whose
-	 * parent was deleted or trashed are reusable.
+	 * still owned by another live listing is not reused (that would remove it from
+	 * that listing). Attachments that are unattached, already on this post, or
+	 * whose parent is not a live listing are reusable. The latter includes images
+	 * of trashed listings and of deleted listings, which WordPress re-parents to
+	 * the listing's own parent (the HivePress vendor).
 	 *
 	 * @param string $source_hash MD5 of the source URL.
 	 * @param int    $post_parent Target post ID.
@@ -178,7 +180,9 @@ class Image_Handler {
 				return (int) $id;
 			}
 
-			if ( ! $fallback && ( ! $parent_id || ! get_post( $parent_id ) || 'trash' === get_post_status( $parent_id ) ) ) {
+			$parent = $parent_id ? get_post( $parent_id ) : null;
+
+			if ( ! $fallback && ( ! $parent || 'hp_listing' !== $parent->post_type || 'trash' === $parent->post_status ) ) {
 				$fallback = (int) $id;
 			}
 		}

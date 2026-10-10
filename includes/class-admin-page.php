@@ -30,6 +30,8 @@ class Admin_Page {
 		add_action( 'admin_init', [ __CLASS__, 'handle_export_request' ] );
 		add_action( 'admin_init', [ __CLASS__, 'handle_step_actions' ] );
 		add_action( 'admin_enqueue_scripts', [ __CLASS__, 'enqueue_admin_assets' ] );
+		add_action( 'wp_ajax_hp_pb_import_start', [ __CLASS__, 'ajax_import_start' ] );
+		add_action( 'wp_ajax_hp_pb_import_chunk', [ __CLASS__, 'ajax_import_chunk' ] );
 	}
 
 	/**
@@ -65,7 +67,182 @@ class Admin_Page {
 			.hp-error-box { background: #fcf0f2; border-left: 4px solid #d63638; padding: 12px 18px; margin-top: 15px; max-height: 250px; overflow-y: auto; }
 			.hp-field-desc { color: #646970; font-size: 12px; margin-top: 4px; line-height: 1.4; }
 			.hp-col-select { min-width: 320px; max-width: 480px; }
+			.hp-progress { height: 22px; background: #f0f0f1; border: 1px solid #c3c4c7; border-radius: 11px; overflow: hidden; margin: 15px 0 10px; max-width: 600px; }
+			.hp-progress-bar { height: 100%; width: 0; background: #2271b1; transition: width .3s ease; }
+			.hp-progress-text { font-size: 14px; font-weight: 600; }
+			.hp-progress-stats strong { margin-right: 14px; }
 		' );
+
+		$step = isset( $_GET['step'] ) ? absint( $_GET['step'] ) : 1;
+		if ( 2 !== $step ) {
+			return;
+		}
+
+		wp_enqueue_script(
+			'pb-hivepress-import-progress',
+			plugins_url( 'assets/js/import-progress.js', dirname( __FILE__ ) ),
+			[],
+			'1.1.0',
+			true
+		);
+
+		wp_localize_script( 'pb-hivepress-import-progress', 'hpPbImport', [
+			'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+			'i18n'    => [
+				/* translators: Placeholders are kept literal: {processed}, {total}, {percent}. */
+				'progress'    => __( 'Processing row {processed} of {total} ({percent}%)…', 'pb-hivepress-import' ),
+				'preparing'   => __( 'Preparing import…', 'pb-hivepress-import' ),
+				'resuming'    => __( 'Resuming import…', 'pb-hivepress-import' ),
+				'done'        => __( 'Import complete. Loading summary…', 'pb-hivepress-import' ),
+				'failed'      => __( 'Import paused:', 'pb-hivepress-import' ),
+				/* translators: {status} is the HTTP status code. */
+				'badResponse' => __( 'Unexpected server response (HTTP {status}). Check the PHP error log.', 'pb-hivepress-import' ),
+				'unknown'     => __( 'Unknown error.', 'pb-hivepress-import' ),
+				/* translators: {row} is the CSV row number. */
+				'rowLabel'    => __( 'Row #{row}:', 'pb-hivepress-import' ),
+			],
+		] );
+	}
+
+	/**
+	 * Verify an import AJAX request and return the current import session.
+	 *
+	 * Sends a JSON error and exits when the request is invalid.
+	 *
+	 * @return array
+	 */
+	protected static function verify_ajax_request() {
+		if ( ! check_ajax_referer( 'hp_pb_process_action', 'nonce', false ) || ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( [ 'message' => __( 'Your session has expired. Please reload the page.', 'pb-hivepress-import' ) ], 403 );
+		}
+
+		$session = get_transient( 'hp_import_session_' . get_current_user_id() );
+		if ( ! $session || ! file_exists( $session['file_path'] ) ) {
+			wp_send_json_error( [ 'message' => __( 'Upload session expired. Please upload your CSV again.', 'pb-hivepress-import' ) ] );
+		}
+
+		return $session;
+	}
+
+	/**
+	 * Build the progress payload returned to the browser.
+	 *
+	 * @param array $session Import session.
+	 * @return array
+	 */
+	protected static function get_progress_data( $session ) {
+		return [
+			'processed' => (int) $session['row_index'] - 1,
+			'total'     => (int) $session['total_rows'],
+			'created'   => (int) $session['created'],
+			'updated'   => (int) $session['updated'],
+			'failed'    => (int) $session['failed'],
+		];
+	}
+
+	/**
+	 * AJAX: store the column mapping and reset progress before chunked import.
+	 */
+	public static function ajax_import_start() {
+		$session = self::verify_ajax_request();
+
+		$session['mappings']       = ! empty( $_POST['mapping'] ) && is_array( $_POST['mapping'] ) ? array_map( 'sanitize_text_field', wp_unslash( $_POST['mapping'] ) ) : [];
+		$session['total_rows']     = Importer::count_rows( $session['file_path'], $session['delimiter'] );
+		$session['offset']         = 0;
+		$session['row_index']      = 1;
+		$session['pending_offset'] = null;
+		$session['created']        = 0;
+		$session['updated']        = 0;
+		$session['failed']         = 0;
+		$session['errors']         = [];
+		set_transient( 'hp_import_session_' . get_current_user_id(), $session, HOUR_IN_SECONDS );
+
+		wp_send_json_success( self::get_progress_data( $session ) );
+	}
+
+	/**
+	 * AJAX: import the next chunk of rows.
+	 *
+	 * Progress is saved to the session after every row, so a retry after a
+	 * failed request resumes exactly where the import stopped.
+	 */
+	public static function ajax_import_chunk() {
+		$session = self::verify_ajax_request();
+
+		if ( ! isset( $session['mappings'] ) ) {
+			wp_send_json_error( [ 'message' => __( 'Import has not been started.', 'pb-hivepress-import' ) ] );
+		}
+
+		$session_key = 'hp_import_session_' . get_current_user_id();
+
+		// A pending offset means the previous request died while importing that row.
+		$skip_first = null !== $session['pending_offset'];
+		$offset     = $skip_first ? $session['pending_offset'] : $session['offset'];
+
+		$result = Importer::process_chunk( [
+			'file_path'   => $session['file_path'],
+			'delimiter'   => $session['delimiter'],
+			'mode'        => $session['mode'],
+			'category_id' => $session['category_id'],
+			'mappings'    => $session['mappings'],
+			'offset'      => $offset,
+			'row_index'   => $session['row_index'],
+			'chunk_size'  => (int) apply_filters( 'hp_pb_import_chunk_size', 5 ),
+			'skip_first'  => $skip_first,
+			'on_progress' => function( $event ) use ( &$session, $session_key ) {
+				if ( 'start' === $event['type'] ) {
+					$session['pending_offset'] = $event['offset'];
+				} else {
+					$session['pending_offset'] = null;
+					$session['offset']         = $event['offset'];
+					$session['row_index']      = $event['row_index'];
+
+					if ( isset( $session[ $event['result'] ] ) && in_array( $event['result'], [ 'created', 'updated', 'failed' ], true ) ) {
+						$session[ $event['result'] ]++;
+					}
+					if ( ! empty( $event['errors'] ) ) {
+						$session['errors'][ $event['row_index'] ] = $event['errors'];
+					}
+				}
+
+				set_transient( $session_key, $session, HOUR_IN_SECONDS );
+			},
+		] );
+
+		if ( empty( $result['success'] ) ) {
+			wp_send_json_error( [ 'message' => $result['message'] ] );
+		}
+
+		// The last "start" event fires at end of file; clear it so a retry doesn't skip anything.
+		$session['pending_offset'] = null;
+
+		$data           = self::get_progress_data( $session );
+		$data['errors'] = $result['errors'];
+		$data['done']   = $result['done'];
+
+		if ( $result['done'] ) {
+			set_transient( 'hp_import_result_' . get_current_user_id(), [
+				'success' => true,
+				'stats'   => [
+					'total_rows' => $data['processed'],
+					'created'    => $session['created'],
+					'updated'    => $session['updated'],
+					'failed'     => $session['failed'],
+					'errors'     => $session['errors'],
+				],
+			], HOUR_IN_SECONDS );
+
+			if ( file_exists( $session['file_path'] ) ) {
+				@unlink( $session['file_path'] );
+			}
+			delete_transient( $session_key );
+
+			$data['redirect'] = admin_url( 'edit.php?post_type=hp_listing&page=' . self::PAGE_SLUG . '&step=3' );
+		} else {
+			set_transient( $session_key, $session, HOUR_IN_SECONDS );
+		}
+
+		wp_send_json_success( $data );
 	}
 
 	/**
@@ -84,6 +261,11 @@ class Admin_Page {
 	 * Handle Wizard Post Submissions (Upload CSV & Process Import).
 	 */
 	public static function handle_step_actions() {
+		// admin_init also fires for admin-ajax.php; chunked imports are handled by the wp_ajax_* actions.
+		if ( wp_doing_ajax() ) {
+			return;
+		}
+
 		// Action 1: Upload file (Step 1 -> Step 2)
 		if ( ! empty( $_POST['hp_pb_upload_nonce'] ) && wp_verify_nonce( sanitize_key( $_POST['hp_pb_upload_nonce'] ), 'hp_pb_upload_action' ) ) {
 			if ( empty( $_FILES['csv_file']['tmp_name'] ) ) {
@@ -154,39 +336,6 @@ class Admin_Page {
 
 			wp_safe_redirect( admin_url( 'edit.php?post_type=hp_listing&page=' . self::PAGE_SLUG . '&step=3' ) );
 			exit;
-		}
-
-		// Action 3: AJAX Batch Chunk Processing (Step 2 -> Progress)
-		if ( ! empty( $_POST['hp_pb_ajax_nonce'] ) && wp_verify_nonce( sanitize_key( $_POST['hp_pb_ajax_nonce'] ), 'hp_pb_ajax_action' ) ) {
-			$session = get_transient( 'hp_import_session_' . get_current_user_id() );
-			if ( ! $session || ! file_exists( $session['file_path'] ) ) {
-				wp_send_json_error( [ 'message' => 'Upload session expired' ] );
-				wp_die();
-			}
-
-			$chunk_size = ! empty( $_POST['chunk_size'] ) ? absint( $_POST['chunk_size'] ) : 10;
-			$start_row  = ! empty( $_POST['start_row'] ) ? absint( $_POST['start_row'] ) : 1;
-
-			$result = Importer::process_chunk( [
-				'file_path'   => $session['file_path'],
-				'delimiter'   => $session['delimiter'],
-				'mode'        => $session['mode'],
-				'category_id' => $session['category_id'],
-				'mappings'    => ! empty( $_POST['mapping'] ) && is_array( $_POST['mapping'] ) ? array_map( 'sanitize_text_field', wp_unslash( $_POST['mapping'] ) ) : [],
-				'start_row'   => $start_row,
-				'chunk_size'  => $chunk_size,
-			] );
-
-			// Update session with new progress
-			$session['current_row'] = $result['current_row'];
-			$session['total_rows']  = $result['total_rows'];
-			$session['created']     = $result['created'] + ( $session['created'] ?? 0 );
-			$session['updated']     = $result['updated'] + ( $session['updated'] ?? 0 );
-			$session['failed']      = $result['failed'] + ( $session['failed'] ?? 0 );
-			set_transient( 'hp_import_session_' . get_current_user_id(), $session, HOUR_IN_SECONDS );
-
-			wp_send_json_success( $result );
-			wp_die();
 		}
 	}
 
@@ -323,7 +472,7 @@ class Admin_Page {
 			<h2><span class="hp-step-badge"><?php esc_html_e( 'Step 2', 'pb-hivepress-import' ); ?></span> <?php esc_html_e( 'Map Columns', 'pb-hivepress-import' ); ?></h2>
 			<p><?php esc_html_e( 'For each HivePress listing field below, choose which column from your CSV file contains the data.', 'pb-hivepress-import' ); ?></p>
 
-			<form method="post" action="">
+			<form method="post" action="" id="hp-pb-mapping-form">
 				<?php wp_nonce_field( 'hp_pb_process_action', 'hp_pb_process_nonce' ); ?>
 
 				<table class="hp-mapping-table">
@@ -369,7 +518,11 @@ class Admin_Page {
 												( 'images' === $field_key && in_array( $clean_col_name, [ 'images', 'image', 'photo', 'photos', 'picture' ], true ) ) ||
 												( 'categories' === $field_key && in_array( $clean_col_name, [ 'categories', 'category', 'subtypes', 'industry' ], true ) ) ||
 												( 'id' === $field_key && in_array( $clean_col_name, [ 'id', 'listing_id', 'post_id' ], true ) ) ||
-												( 'user' === $field_key && in_array( $clean_col_name, [ 'user', 'author', 'email', 'username' ], true ) )
+												( 'phone_number' === $field_key && in_array( $clean_col_name, [ 'phone', 'phone_number', 'telephone' ], true ) ) ||
+												( 'google_cid' === $field_key && in_array( $clean_col_name, [ 'cid', 'google_cid' ], true ) ) ||
+												( 'google_place_id' === $field_key && in_array( $clean_col_name, [ 'place_id', 'google_place_id' ], true ) ) ||
+												( 'total_google_reviews' === $field_key && in_array( $clean_col_name, [ 'reviews', 'reviews_count', 'total_reviews' ], true ) ) ||
+												( 'user' === $field_key && in_array( $clean_col_name, [ 'user', 'author', 'username' ], true ) )
 											) {
 												$is_match = true;
 											}
@@ -405,6 +558,24 @@ class Admin_Page {
 					</a>
 				</div>
 			</form>
+
+			<div id="hp-pb-progress" hidden>
+				<div class="hp-progress"><div class="hp-progress-bar"></div></div>
+				<p class="hp-progress-text"></p>
+				<p class="hp-progress-stats">
+					<strong style="color: #00a32a;"><?php esc_html_e( 'Created:', 'pb-hivepress-import' ); ?> <span data-stat="created">0</span></strong>
+					<strong style="color: #2271b1;"><?php esc_html_e( 'Updated:', 'pb-hivepress-import' ); ?> <span data-stat="updated">0</span></strong>
+					<strong style="color: #d63638;"><?php esc_html_e( 'Failed:', 'pb-hivepress-import' ); ?> <span data-stat="failed">0</span></strong>
+				</p>
+				<p class="description"><?php esc_html_e( 'Keep this page open until the import finishes.', 'pb-hivepress-import' ); ?></p>
+				<div class="hp-error-box" hidden>
+					<h3 style="margin-top: 0; color: #d63638;"><?php esc_html_e( 'Import Warnings & Errors Log:', 'pb-hivepress-import' ); ?></h3>
+					<ul style="list-style: disc; margin-left: 20px;"></ul>
+				</div>
+				<p class="hp-progress-actions" hidden>
+					<button type="button" class="button button-primary" id="hp-pb-retry"><?php esc_html_e( 'Retry / Resume Import', 'pb-hivepress-import' ); ?></button>
+				</p>
+			</div>
 		</div>
 		<?php
 	}

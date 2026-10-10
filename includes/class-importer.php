@@ -201,7 +201,33 @@ class Importer {
 	}
 
 	/**
-	 * Run the import process for a given CSV file.
+	 * Count the data rows (excluding the header) in a CSV file.
+	 *
+	 * @param string $file_path
+	 * @param string $delimiter
+	 * @return int
+	 */
+	public static function count_rows( $file_path, $delimiter = ',' ) {
+		$file = is_readable( $file_path ) ? fopen( $file_path, 'r' ) : false;
+		if ( ! $file ) {
+			return 0;
+		}
+
+		$count = -1; // Header row.
+		while ( false !== fgetcsv( $file, 0, $delimiter, '"', '\\' ) ) {
+			$count++;
+		}
+
+		fclose( $file );
+
+		return max( 0, $count );
+	}
+
+	/**
+	 * Run the import process for a given CSV file in a single request.
+	 *
+	 * Used when JavaScript is unavailable; the admin UI normally imports in
+	 * chunks via process_chunk().
 	 *
 	 * @param array $args Import arguments:
 	 *                    - file_path: string
@@ -209,88 +235,31 @@ class Importer {
 	 *                    - mode: 'create'|'update'|'append'
 	 *                    - category_id: int
 	 *                    - mappings: array [ field_key => column_index_or_none ]
-	 * @return array Result stats: count, errors, updated, created
+	 * @return array { success: bool, message?: string, stats?: array }
 	 */
 	public static function process( $args ) {
-		$file_path   = isset( $args['file_path'] ) ? $args['file_path'] : '';
-		$delimiter   = ! empty( $args['delimiter'] ) ? $args['delimiter'] : ',';
-		$mode        = ! empty( $args['mode'] ) ? $args['mode'] : 'create';
-		$category_id = ! empty( $args['category_id'] ) ? absint( $args['category_id'] ) : 0;
-		$raw_mappings = ! empty( $args['mappings'] ) ? $args['mappings'] : [];
+		$result = self::process_chunk( array_merge( $args, [
+			'offset'     => 0,
+			'row_index'  => 1,
+			'chunk_size' => PHP_INT_MAX,
+		] ) );
 
-		if ( ! file_exists( $file_path ) || ! is_readable( $file_path ) ) {
+		if ( empty( $result['success'] ) ) {
 			return [
 				'success' => false,
-				'message' => __( 'CSV file could not be found or read.', 'pb-hivepress-import' ),
+				'message' => $result['message'],
 			];
 		}
-
-		$file = fopen( $file_path, 'r' );
-		if ( ! $file ) {
-			return [
-				'success' => false,
-				'message' => __( 'Failed to open CSV file stream.', 'pb-hivepress-import' ),
-			];
-		}
-
-		// Read header
-		$header = fgetcsv( $file, 0, $delimiter, '"', '\\' );
-		if ( ! $header ) {
-			fclose( $file );
-			return [
-				'success' => false,
-				'message' => __( 'CSV file header is empty or invalid.', 'pb-hivepress-import' ),
-			];
-		}
-
-		// Active mappings: field_key => column_index
-		$field_to_col = [];
-		foreach ( $raw_mappings as $field_key => $col_idx ) {
-			if ( is_numeric( $col_idx ) && (int) $col_idx >= 0 ) {
-				$field_to_col[ sanitize_key( $field_key ) ] = (int) $col_idx;
-			}
-		}
-
-		$mappable_fields = self::get_mappable_fields( $category_id, $mode );
-		$row_index       = 1;
-		$stats = [
-			'total_rows'   => 0,
-			'created'      => 0,
-			'updated'      => 0,
-			'failed'       => 0,
-			'errors'       => [],
-		];
-
-		// Iterate through rows
-		while ( ( $row = fgetcsv( $file, 0, $delimiter, '"', '\\' ) ) !== false ) {
-			$row_index++;
-			$stats['total_rows']++;
-
-			// Skip completely empty lines
-			if ( empty( array_filter( $row ) ) ) {
-				continue;
-			}
-
-			$result = self::import_row( $row, $field_to_col, $mappable_fields, $mode, $category_id );
-
-			if ( ! empty( $result['errors'] ) ) {
-				$stats['errors'][ $row_index ] = $result['errors'];
-			}
-
-			if ( 'failed' === $result['result'] ) {
-				$stats['failed']++;
-			} elseif ( 'created' === $result['result'] ) {
-				$stats['created']++;
-			} else {
-				$stats['updated']++;
-			}
-		}
-
-		fclose( $file );
 
 		return [
 			'success' => true,
-			'stats'   => $stats,
+			'stats'   => [
+				'total_rows' => $result['processed'],
+				'created'    => $result['created'],
+				'updated'    => $result['updated'],
+				'failed'     => $result['failed'],
+				'errors'     => $result['errors'],
+			],
 		];
 	}
 
@@ -525,7 +494,10 @@ class Importer {
 	}
 
 	/**
-	 * Process a chunk of rows for AJAX batch import.
+	 * Import a chunk of rows, resuming from a byte offset in the CSV file.
+	 *
+	 * Resuming by offset (rather than by row number) avoids re-reading the file
+	 * from the start on every request and handles quoted multi-line fields.
 	 *
 	 * @param array $args Chunk processing arguments:
 	 *                    - file_path: string
@@ -533,60 +505,55 @@ class Importer {
 	 *                    - mode: 'create'|'update'|'append'
 	 *                    - category_id: int
 	 *                    - mappings: array [ field_key => column_index_or_none ]
-	 *                    - start_row: int (first row to process)
-	 *                    - chunk_size: int (number of rows to process)
-	 * @return array Chunk result: current_row, total_rows, created, updated, failed, errors
+	 *                    - offset: int Byte offset of the next row (0 = start of file, header is skipped).
+	 *                    - row_index: int CSV row number of the last processed row (header = 1).
+	 *                    - chunk_size: int Maximum number of rows to process.
+	 *                    - skip_first: bool Skip the next row and report it as failed (it crashed a previous request).
+	 *                    - on_progress: callable Called with [ 'type' => 'start' ] before each row and
+	 *                      [ 'type' => 'row', 'result', 'errors' ] after it, both with 'offset' and 'row_index'.
+	 * @return array { success, message, offset, row_index, processed, created, updated, failed, errors, done }
 	 */
 	public static function process_chunk( $args ) {
-		$file_path   = isset( $args['file_path'] ) ? $args['file_path'] : '';
-		$delimiter   = ! empty( $args['delimiter'] ) ? $args['delimiter'] : ',';
-		$mode        = ! empty( $args['mode'] ) ? $args['mode'] : 'create';
-		$category_id = ! empty( $args['category_id'] ) ? absint( $args['category_id'] ) : 0;
+		$file_path    = isset( $args['file_path'] ) ? $args['file_path'] : '';
+		$delimiter    = ! empty( $args['delimiter'] ) ? $args['delimiter'] : ',';
+		$mode         = ! empty( $args['mode'] ) ? $args['mode'] : 'create';
+		$category_id  = ! empty( $args['category_id'] ) ? absint( $args['category_id'] ) : 0;
 		$raw_mappings = ! empty( $args['mappings'] ) ? $args['mappings'] : [];
-		$start_row   = ! empty( $args['start_row'] ) ? absint( $args['start_row'] ) : 1;
-		$chunk_size  = ! empty( $args['chunk_size'] ) ? absint( $args['chunk_size'] ) : 10;
+		$offset       = ! empty( $args['offset'] ) ? absint( $args['offset'] ) : 0;
+		$row_index    = ! empty( $args['row_index'] ) ? absint( $args['row_index'] ) : 1;
+		$chunk_size   = ! empty( $args['chunk_size'] ) ? (int) $args['chunk_size'] : 10;
+		$on_progress  = isset( $args['on_progress'] ) && is_callable( $args['on_progress'] ) ? $args['on_progress'] : null;
+
+		$result = [
+			'success'   => false,
+			'message'   => '',
+			'offset'    => $offset,
+			'row_index' => $row_index,
+			'processed' => 0,
+			'created'   => 0,
+			'updated'   => 0,
+			'failed'    => 0,
+			'errors'    => [],
+			'done'      => false,
+		];
 
 		if ( ! file_exists( $file_path ) || ! is_readable( $file_path ) ) {
-			return [
-				'success' => false,
-				'current_row'   => $start_row - 1,
-				'total_rows'    => 0,
-				'created'       => 0,
-				'updated'       => 0,
-				'failed'        => 0,
-				'errors'        => [],
-				'message'       => __( 'CSV file could not be found or read.', 'pb-hivepress-import' ),
-			];
+			$result['message'] = __( 'CSV file could not be found or read.', 'pb-hivepress-import' );
+			return $result;
 		}
 
 		$file = fopen( $file_path, 'r' );
 		if ( ! $file ) {
-			return [
-				'success' => false,
-				'current_row'   => $start_row - 1,
-				'total_rows'    => 0,
-				'created'       => 0,
-				'updated'       => 0,
-				'failed'        => 0,
-				'errors'        => [],
-				'message'       => __( 'Failed to open CSV file stream.', 'pb-hivepress-import' ),
-			];
+			$result['message'] = __( 'Failed to open CSV file stream.', 'pb-hivepress-import' );
+			return $result;
 		}
 
-		// Read header
-		$header = fgetcsv( $file, 0, $delimiter, '"', '\\' );
-		if ( ! $header ) {
+		if ( $offset ) {
+			fseek( $file, $offset );
+		} elseif ( ! fgetcsv( $file, 0, $delimiter, '"', '\\' ) ) {
 			fclose( $file );
-			return [
-				'success' => false,
-				'current_row'   => $start_row - 1,
-				'total_rows'    => 0,
-				'created'       => 0,
-				'updated'       => 0,
-				'failed'        => 0,
-				'errors'        => [],
-				'message'       => __( 'CSV file header is empty or invalid.', 'pb-hivepress-import' ),
-			];
+			$result['message'] = __( 'CSV file header is empty or invalid.', 'pb-hivepress-import' );
+			return $result;
 		}
 
 		// Active mappings: field_key => column_index
@@ -598,58 +565,72 @@ class Importer {
 		}
 
 		$mappable_fields = self::get_mappable_fields( $category_id, $mode );
-		$row_index       = $start_row;
-		$stats = [
-			'total_rows'   => 0,
-			'created'      => 0,
-			'updated'      => 0,
-			'failed'       => 0,
-			'errors'       => [],
-		];
+		$skip_first      = ! empty( $args['skip_first'] );
 
-		// Track progress within this chunk
-		$chunk_start_row = $row_index;
-		$rows_processed_in_chunk = 0;
+		while ( $result['processed'] < $chunk_size ) {
+			if ( $on_progress ) {
+				call_user_func( $on_progress, [
+					'type'      => 'start',
+					'offset'    => ftell( $file ),
+					'row_index' => $row_index,
+				] );
+			}
 
-		// Iterate through rows (limited to chunk_size)
-		while ( ( $row = fgetcsv( $file, 0, $delimiter, '"', '\\' ) ) !== false && $rows_processed_in_chunk < $chunk_size ) {
+			$row = fgetcsv( $file, 0, $delimiter, '"', '\\' );
+			if ( false === $row ) {
+				break;
+			}
+
 			$row_index++;
-			$stats['total_rows']++;
+			$result['processed']++;
 
-			// Skip completely empty lines
-			if ( empty( array_filter( $row ) ) ) {
-				$rows_processed_in_chunk++;
-				continue;
-			}
-
-			$result = self::import_row( $row, $field_to_col, $mappable_fields, $mode, $category_id );
-
-			if ( ! empty( $result['errors'] ) ) {
-				$stats['errors'][ $row_index ] = $result['errors'];
-			}
-
-			if ( 'failed' === $result['result'] ) {
-				$stats['failed']++;
-			} elseif ( 'created' === $result['result'] ) {
-				$stats['created']++;
+			if ( $skip_first ) {
+				// A previous request stopped while importing this row; don't retry it forever.
+				$skip_first = false;
+				$row_result = [
+					'result' => 'failed',
+					'errors' => [ __( 'Skipped: the server stopped while importing this row (timeout or fatal error).', 'pb-hivepress-import' ) ],
+				];
+			} elseif ( empty( array_filter( $row ) ) ) {
+				// Skip completely empty lines
+				$row_result = [
+					'result' => 'skipped',
+					'errors' => [],
+				];
 			} else {
-				$stats['updated']++;
+				$row_result = self::import_row( $row, $field_to_col, $mappable_fields, $mode, $category_id );
 			}
 
-			$rows_processed_in_chunk++;
+			if ( ! empty( $row_result['errors'] ) ) {
+				$result['errors'][ $row_index ] = $row_result['errors'];
+			}
+
+			if ( 'failed' === $row_result['result'] ) {
+				$result['failed']++;
+			} elseif ( 'created' === $row_result['result'] ) {
+				$result['created']++;
+			} elseif ( 'updated' === $row_result['result'] ) {
+				$result['updated']++;
+			}
+
+			if ( $on_progress ) {
+				call_user_func( $on_progress, [
+					'type'      => 'row',
+					'offset'    => ftell( $file ),
+					'row_index' => $row_index,
+					'result'    => $row_result['result'],
+					'errors'    => $row_result['errors'],
+				] );
+			}
 		}
+
+		$result['offset']    = ftell( $file );
+		$result['row_index'] = $row_index;
+		$result['done']      = false === fgetcsv( $file, 0, $delimiter, '"', '\\' );
+		$result['success']   = true;
 
 		fclose( $file );
 
-		return [
-			'success' => true,
-			'current_row'   => $row_index,
-			'total_rows'    => $stats['total_rows'] ?? 0,
-			'created'       => $stats['created'] ?? 0,
-			'updated'       => $stats['updated'] ?? 0,
-			'failed'        => $stats['failed'] ?? 0,
-			'errors'        => $stats['errors'] ?? [],
-			'message'       => '',
-		];
+		return $result;
 	}
 }

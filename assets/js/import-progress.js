@@ -1,0 +1,153 @@
+/**
+ * Chunked AJAX import with a live progress bar (Step 2 → Step 3).
+ *
+ * Without JavaScript (or fetch support) the mapping form falls back to a
+ * normal POST that imports everything in a single request.
+ *
+ * @package HivePress_Import_PB
+ */
+( function () {
+	'use strict';
+
+	var config = window.hpPbImport;
+	var form = document.getElementById( 'hp-pb-mapping-form' );
+	var panel = document.getElementById( 'hp-pb-progress' );
+
+	if ( ! config || ! form || ! panel || ! window.fetch || ! window.FormData ) {
+		return;
+	}
+
+	var bar = panel.querySelector( '.hp-progress-bar' );
+	var text = panel.querySelector( '.hp-progress-text' );
+	var errorBox = panel.querySelector( '.hp-error-box' );
+	var errorList = errorBox.querySelector( 'ul' );
+	var actions = panel.querySelector( '.hp-progress-actions' );
+	var retryButton = document.getElementById( 'hp-pb-retry' );
+	var nonce = form.querySelector( '[name="hp_pb_process_nonce"]' ).value;
+	var running = false;
+
+	function format( template, values ) {
+		return template.replace( /\{(\w+)\}/g, function ( match, key ) {
+			return Object.prototype.hasOwnProperty.call( values, key ) ? values[ key ] : match;
+		} );
+	}
+
+	function post( action, data ) {
+		data = data || new FormData();
+		data.append( 'action', action );
+		data.append( 'nonce', nonce );
+
+		return fetch( config.ajaxUrl, {
+			method: 'POST',
+			credentials: 'same-origin',
+			body: data,
+		} ).then( function ( response ) {
+			return response.text().then( function ( body ) {
+				var json;
+
+				try {
+					json = JSON.parse( body );
+				} catch ( e ) {
+					throw new Error( format( config.i18n.badResponse, { status: response.status } ) );
+				}
+
+				if ( ! json || ! json.success ) {
+					throw new Error( ( json && json.data && json.data.message ) || config.i18n.unknown );
+				}
+
+				return json.data;
+			} );
+		} );
+	}
+
+	function render( progress ) {
+		var percent = progress.total ? Math.min( 100, Math.round( ( progress.processed / progress.total ) * 100 ) ) : 0;
+
+		bar.style.width = percent + '%';
+		text.textContent = format( config.i18n.progress, {
+			processed: progress.processed,
+			total: progress.total,
+			percent: percent,
+		} );
+
+		[ 'created', 'updated', 'failed' ].forEach( function ( key ) {
+			panel.querySelector( '[data-stat="' + key + '"]' ).textContent = progress[ key ];
+		} );
+
+		Object.keys( progress.errors || {} ).forEach( function ( row ) {
+			var item = document.createElement( 'li' );
+			var label = document.createElement( 'strong' );
+
+			label.textContent = format( config.i18n.rowLabel, { row: row } ) + ' ';
+			item.appendChild( label );
+			item.appendChild( document.createTextNode( [].concat( progress.errors[ row ] ).join( ' | ' ) ) );
+			errorList.appendChild( item );
+			errorBox.hidden = false;
+		} );
+	}
+
+	function runChunks() {
+		return post( 'hp_pb_import_chunk' ).then( function ( progress ) {
+			render( progress );
+
+			if ( progress.done ) {
+				running = false;
+				text.textContent = config.i18n.done;
+				window.location.href = progress.redirect;
+				return;
+			}
+
+			return runChunks();
+		} );
+	}
+
+	function fail( error ) {
+		running = false;
+		text.textContent = config.i18n.failed + ' ' + error.message;
+		actions.hidden = false;
+	}
+
+	form.addEventListener( 'submit', function ( event ) {
+		event.preventDefault();
+
+		if ( running ) {
+			return;
+		}
+
+		running = true;
+		form.hidden = true;
+		panel.hidden = false;
+		text.textContent = config.i18n.preparing;
+
+		var mapping = new FormData( form );
+
+		// Send only the mapping; the nonce field belongs to the non-JS form submission.
+		mapping.delete( 'hp_pb_process_nonce' );
+		mapping.delete( '_wp_http_referer' );
+
+		post( 'hp_pb_import_start', mapping )
+			.then( function ( progress ) {
+				render( progress );
+				return runChunks();
+			} )
+			.catch( fail );
+	} );
+
+	retryButton.addEventListener( 'click', function () {
+		if ( running ) {
+			return;
+		}
+
+		running = true;
+		actions.hidden = true;
+		text.textContent = config.i18n.resuming;
+		runChunks().catch( fail );
+	} );
+
+	window.addEventListener( 'beforeunload', function ( event ) {
+		if ( running ) {
+			event.preventDefault();
+			event.returnValue = '';
+		}
+	} );
+}() );
