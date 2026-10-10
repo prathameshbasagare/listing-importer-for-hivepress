@@ -521,6 +521,7 @@ class Admin_Page {
 												( 'phone_number' === $field_key && in_array( $clean_col_name, [ 'phone', 'phone_number', 'telephone' ], true ) ) ||
 												( 'google_cid' === $field_key && in_array( $clean_col_name, [ 'cid', 'google_cid' ], true ) ) ||
 												( 'google_place_id' === $field_key && in_array( $clean_col_name, [ 'place_id', 'google_place_id' ], true ) ) ||
+												( 'google_rating' === $field_key && in_array( $clean_col_name, [ 'rating', 'google_rating' ], true ) ) ||
 												( 'total_google_reviews' === $field_key && in_array( $clean_col_name, [ 'reviews', 'reviews_count', 'total_reviews' ], true ) ) ||
 												( 'user' === $field_key && in_array( $clean_col_name, [ 'user', 'author', 'username' ], true ) )
 											) {

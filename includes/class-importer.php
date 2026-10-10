@@ -80,7 +80,7 @@ class Importer {
 			$fields['categories'] = [
 				'label'       => __( 'Categories', 'hivepress' ),
 				'description' => __( 'Category names, slugs, or IDs (comma-separated for multiple).', 'pb-hivepress-import' ),
-				'required'    => false,
+				'required'    => true,
 				'_order'      => 20,
 			];
 		}
@@ -123,10 +123,15 @@ class Importer {
 			'_order'      => 70,
 		];
 
-		// Instantiate listing model to fetch any custom attributes defined in HivePress Attributes
+		// Instantiate listing model to fetch any custom attributes defined in HivePress Attributes.
+		// Like the official HivePress Import, only fields on the listing edit form
+		// (attributes marked "Editable") are offered for mapping.
 		$listing = new Models\Listing();
 		if ( $category_id ) {
 			$listing->set_categories( [ $category_id ] );
+
+			// Load the category's attributes onto the model (same as HivePress Import).
+			$listing->set_id( null );
 		}
 
 		if ( class_exists( '\HivePress\Forms\Listing_Update' ) ) {
@@ -147,23 +152,33 @@ class Importer {
 			}
 		}
 
-		// Expose attributes the edit form omits because they are not marked
-		// "editable" (e.g. email, google_place_id). They are still registered
-		// on the model and can be written through fill()/save().
-		$listing->set_id( null );
+		/**
+		 * Filters extra listing attributes offered for mapping although they are
+		 * not "Editable" (and so not on the listing edit form). Keeping them
+		 * non-editable stops vendors from changing them on the front end.
+		 *
+		 * @param string[] $names Attribute field names.
+		 */
+		$extra_names = (array) apply_filters( 'hp_pb_import_extra_fields', [ 'google_place_id', 'google_rating' ] );
 
-		foreach ( $listing->_get_fields() as $name => $field ) {
-			if ( isset( $fields[ $name ] ) || ! $field->get_label() ) {
-				continue;
+		if ( $extra_names ) {
+			$model_fields = ( new Models\Listing() )->set_id( null )->_get_fields();
+
+			foreach ( $extra_names as $name ) {
+				if ( isset( $fields[ $name ] ) || ! isset( $model_fields[ $name ] ) ) {
+					continue;
+				}
+
+				$field = $model_fields[ $name ];
+
+				$fields[ $name ] = [
+					'label'       => $field->get_label(),
+					'description' => $field->get_description(),
+					'required'    => false,
+					'field_obj'   => $field,
+					'_order'      => 110,
+				];
 			}
-
-			$fields[ $name ] = [
-				'label'       => $field->get_label(),
-				'description' => $field->get_description(),
-				'required'    => false,
-				'field_obj'   => $field,
-				'_order'      => 110,
-			];
 		}
 
 		return $fields;
