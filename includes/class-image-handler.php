@@ -55,15 +55,21 @@ class Image_Handler {
 			return new \WP_Error( 'invalid_url', __( 'Invalid image URL provided.', 'pb-hivepress-import' ) );
 		}
 
-		// Image deduplication: check if attachment with this source URL hash already exists
-		$source_hash = md5( $url );
-		$existing_id = false;
+		// Image deduplication: reuse an attachment previously imported from this URL.
+		$existing_id = self::find_reusable_attachment( md5( $url ), $post_parent );
 
-		global $wpdb;
-		$existing_id = $wpdb->get_var( $wpdb->prepare(
-			"SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_hp_import_source_hash' AND meta_value = %s LIMIT 1",
-			$source_hash
-		) );
+		if ( $existing_id ) {
+			if ( $post_parent ) {
+				wp_update_post( [
+					'ID'          => $existing_id,
+					'post_parent' => $post_parent,
+				] );
+				update_post_meta( $existing_id, 'hp_parent_model', 'listing' );
+				update_post_meta( $existing_id, 'hp_parent_field', sanitize_key( $parent_field ) );
+			}
+
+			return $existing_id;
+		}
 
 		// Ensure WordPress administration file dependencies are available.
 		require_once ABSPATH . 'wp-admin/includes/image.php';
@@ -137,6 +143,47 @@ class Image_Handler {
 		update_post_meta( $attachment_id, '_hp_import_source_hash', md5( $url ) );
 
 		return $attachment_id;
+	}
+
+	/**
+	 * Find an existing imported attachment with the given source hash that can be
+	 * attached to the given post.
+	 *
+	 * HivePress links gallery images one-to-many via post_parent, so an attachment
+	 * still owned by another live post is not reused (that would remove it from
+	 * that post). Attachments that are unattached, already on this post, or whose
+	 * parent was deleted or trashed are reusable.
+	 *
+	 * @param string $source_hash MD5 of the source URL.
+	 * @param int    $post_parent Target post ID.
+	 * @return int Attachment ID, or 0 if none is reusable.
+	 */
+	protected static function find_reusable_attachment( $source_hash, $post_parent ) {
+		global $wpdb;
+
+		$ids = $wpdb->get_col( $wpdb->prepare(
+			"SELECT pm.post_id FROM {$wpdb->postmeta} pm
+			INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id AND p.post_type = 'attachment'
+			WHERE pm.meta_key = '_hp_import_source_hash' AND pm.meta_value = %s
+			ORDER BY pm.post_id ASC",
+			$source_hash
+		) );
+
+		$fallback = 0;
+
+		foreach ( $ids as $id ) {
+			$parent_id = (int) wp_get_post_parent_id( (int) $id );
+
+			if ( $post_parent && $parent_id === (int) $post_parent ) {
+				return (int) $id;
+			}
+
+			if ( ! $fallback && ( ! $parent_id || ! get_post( $parent_id ) || 'trash' === get_post_status( $parent_id ) ) ) {
+				$fallback = (int) $id;
+			}
+		}
+
+		return $fallback;
 	}
 
 	/**

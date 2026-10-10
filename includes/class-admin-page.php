@@ -131,7 +131,7 @@ class Admin_Page {
 				exit;
 			}
 
-			$mappings = ! empty( $_POST['mapping'] ) && is_array( $_POST['mapping'] ) ? $_POST['mapping'] : [];
+			$mappings = ! empty( $_POST['mapping'] ) && is_array( $_POST['mapping'] ) ? array_map( 'sanitize_text_field', wp_unslash( $_POST['mapping'] ) ) : [];
 
 			$result = Importer::process( [
 				'file_path'   => $session['file_path'],
@@ -141,11 +141,13 @@ class Admin_Page {
 				'mappings'    => $mappings,
 			] );
 
-			// Clean up imported file
-			if ( file_exists( $session['file_path'] ) ) {
-				@unlink( $session['file_path'] );
+			// Clean up imported file (kept on failure so the mapping step can be retried)
+			if ( ! empty( $result['success'] ) ) {
+				if ( file_exists( $session['file_path'] ) ) {
+					@unlink( $session['file_path'] );
+				}
+				delete_transient( 'hp_import_session_' . get_current_user_id() );
 			}
-			delete_transient( 'hp_import_session_' . get_current_user_id() );
 
 			// Store result for Step 3 summary
 			set_transient( 'hp_import_result_' . get_current_user_id(), $result, HOUR_IN_SECONDS );
@@ -170,7 +172,7 @@ class Admin_Page {
 				'delimiter'   => $session['delimiter'],
 				'mode'        => $session['mode'],
 				'category_id' => $session['category_id'],
-				'mappings'    => ! empty( $_POST['mapping'] ) ? $_POST['mapping'] : [],
+				'mappings'    => ! empty( $_POST['mapping'] ) && is_array( $_POST['mapping'] ) ? array_map( 'sanitize_text_field', wp_unslash( $_POST['mapping'] ) ) : [],
 				'start_row'   => $start_row,
 				'chunk_size'  => $chunk_size,
 			] );
@@ -362,7 +364,8 @@ class Admin_Page {
 												$clean_col_name === strtolower( $field_key ) ||
 												$clean_col_name === strtolower( $label ) ||
 												( 'title' === $field_key && in_array( $clean_col_name, [ 'name', 'title', 'listing_title', 'company_name' ], true ) ) ||
-												( 'description' === $field_key && in_array( $clean_col_name, [ 'description', 'website_description', 'about', 'content', 'details' ], true ) ) ||
+												( 'description' === $field_key && in_array( $clean_col_name, [ 'description', 'company description', 'company_description', 'website_description', 'content', 'details' ], true ) ) ||
+												( 'location' === $field_key && in_array( $clean_col_name, [ 'address', 'full_address', 'location' ], true ) ) ||
 												( 'images' === $field_key && in_array( $clean_col_name, [ 'images', 'image', 'photo', 'photos', 'picture' ], true ) ) ||
 												( 'categories' === $field_key && in_array( $clean_col_name, [ 'categories', 'category', 'subtypes', 'industry' ], true ) ) ||
 												( 'id' === $field_key && in_array( $clean_col_name, [ 'id', 'listing_id', 'post_id' ], true ) ) ||
@@ -418,6 +421,17 @@ class Admin_Page {
 			<div class="hp-card">
 				<h2><?php esc_html_e( 'No recent import results found.', 'pb-hivepress-import' ); ?></h2>
 				<a href="<?php echo esc_url( admin_url( 'edit.php?post_type=hp_listing&page=' . self::PAGE_SLUG ) ); ?>" class="button button-primary"><?php esc_html_e( 'Start New Import', 'pb-hivepress-import' ); ?></a>
+			</div>
+			<?php
+			return;
+		}
+
+		if ( empty( $result['success'] ) ) {
+			?>
+			<div class="hp-card">
+				<h2><?php esc_html_e( 'Import Failed', 'pb-hivepress-import' ); ?></h2>
+				<p><?php echo esc_html( isset( $result['message'] ) ? $result['message'] : __( 'Unknown error.', 'pb-hivepress-import' ) ); ?></p>
+				<a href="<?php echo esc_url( admin_url( 'edit.php?post_type=hp_listing&page=' . self::PAGE_SLUG . '&step=2' ) ); ?>" class="button button-primary"><?php esc_html_e( '← Back to Mapping', 'pb-hivepress-import' ); ?></a>
 			</div>
 			<?php
 			return;

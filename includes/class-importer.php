@@ -147,6 +147,25 @@ class Importer {
 			}
 		}
 
+		// Expose attributes the edit form omits because they are not marked
+		// "editable" (e.g. email, google_place_id). They are still registered
+		// on the model and can be written through fill()/save().
+		$listing->set_id( null );
+
+		foreach ( $listing->_get_fields() as $name => $field ) {
+			if ( isset( $fields[ $name ] ) || ! $field->get_label() ) {
+				continue;
+			}
+
+			$fields[ $name ] = [
+				'label'       => $field->get_label(),
+				'description' => $field->get_description(),
+				'required'    => false,
+				'field_obj'   => $field,
+				'_order'      => 110,
+			];
+		}
+
 		return $fields;
 	}
 
@@ -167,7 +186,7 @@ class Importer {
 			return [];
 		}
 
-		$columns = fgetcsv( $file, 0, $delimiter );
+		$columns = fgetcsv( $file, 0, $delimiter, '"', '\\' );
 		fclose( $file );
 
 		if ( ! is_array( $columns ) ) {
@@ -215,7 +234,7 @@ class Importer {
 		}
 
 		// Read header
-		$header = fgetcsv( $file, 0, $delimiter );
+		$header = fgetcsv( $file, 0, $delimiter, '"', '\\' );
 		if ( ! $header ) {
 			fclose( $file );
 			return [
@@ -243,7 +262,7 @@ class Importer {
 		];
 
 		// Iterate through rows
-		while ( ( $row = fgetcsv( $file, 0, $delimiter ) ) !== false ) {
+		while ( ( $row = fgetcsv( $file, 0, $delimiter, '"', '\\' ) ) !== false ) {
 			$row_index++;
 			$stats['total_rows']++;
 
@@ -252,240 +271,15 @@ class Importer {
 				continue;
 			}
 
-			// Map row values into field array
-			$field_values = [];
-			foreach ( $field_to_col as $field_key => $col_idx ) {
-				if ( isset( $row[ $col_idx ] ) ) {
-					$field_values[ $field_key ] = trim( $row[ $col_idx ] );
-				}
+			$result = self::import_row( $row, $field_to_col, $mappable_fields, $mode, $category_id );
+
+			if ( ! empty( $result['errors'] ) ) {
+				$stats['errors'][ $row_index ] = $result['errors'];
 			}
 
-			// Validate mandatory fields
-			if ( empty( $field_values['title'] ) && 'update' !== $mode ) {
+			if ( 'failed' === $result['result'] ) {
 				$stats['failed']++;
-				$stats['errors'][ $row_index ][] = __( 'Missing Title for new listing.', 'pb-hivepress-import' );
-				continue;
-			}
-
-			// Resolve author/user
-			$user_id = get_current_user_id();
-			if ( ! empty( $field_values['user'] ) ) {
-				$user = is_email( $field_values['user'] )
-					? get_user_by( 'email', $field_values['user'] )
-					: get_user_by( 'login', $field_values['user'] );
-
-				if ( $user ) {
-					$user_id = $user->ID;
-				}
-			}
-			$field_values['user'] = $user_id;
-
-			// Handle Listing Lookup (Update vs Create)
-			$listing = null;
-			$listing_id = ! empty( $field_values['id'] ) ? absint( $field_values['id'] ) : 0;
-
-			if ( $listing_id ) {
-				$listing = Models\Listing::query()->get_by_id( $listing_id );
-			}
-
-			if ( 'update' === $mode && ! $listing ) {
-				$stats['failed']++;
-				$stats['errors'][ $row_index ][] = sprintf(
-					/* translators: %d: listing ID */
-					__( 'Listing ID %d not found for update.', 'pb-hivepress-import' ),
-					$listing_id
-				);
-				continue;
-			}
-
-			$is_new = false;
-			if ( ! $listing ) {
-				$is_new  = true;
-				$listing = new Models\Listing();
-				$listing->set_status( 'publish' );
-			}
-
-			// Categories
-			$cat_ids = [];
-			if ( $category_id ) {
-				$cat_ids[] = $category_id;
-			}
-			if ( ! empty( $field_values['categories'] ) ) {
-				$cat_parts = array_filter( array_map( 'trim', explode( ',', $field_values['categories'] ) ) );
-				foreach ( $cat_parts as $part ) {
-					if ( is_numeric( $part ) ) {
-						$cat_ids[] = absint( $part );
-					} else {
-						$term = get_term_by( 'name', $part, 'hp_listing_category' );
-						if ( ! $term ) {
-							$term = get_term_by( 'slug', $part, 'hp_listing_category' );
-						}
-						if ( $term ) {
-							$cat_ids[] = $term->term_id;
-						}
-					}
-				}
-			}
-			if ( ! empty( $cat_ids ) ) {
-				$listing->set_categories( array_unique( $cat_ids ) );
-			}
-
-			// Core standard attributes
-			if ( isset( $field_values['title'] ) ) {
-				$listing->set_title( sanitize_text_field( $field_values['title'] ) );
-			}
-			$description = isset( $field_values['description'] ) ? trim( $field_values['description'] ) : '';
-			if ( empty( $description ) && $is_new ) {
-				// HivePress Model enforces required description; fallback to Title or clean placeholder
-				$description = ! empty( $field_values['title'] ) ? sanitize_text_field( $field_values['title'] ) : __( 'No description provided.', 'pb-hivepress-import' );
-			}
-			$listing->set_description( wp_kses_post( $description ) );
-			if ( isset( $field_values['featured'] ) ) {
-				$listing->set_featured( in_array( strtolower( (string) $field_values['featured'] ), [ '1', 'true', 'yes' ], true ) );
-			}
-			if ( isset( $field_values['verified'] ) ) {
-				$listing->set_verified( in_array( strtolower( (string) $field_values['verified'] ), [ '1', 'true', 'yes' ], true ) );
-			}
-			$listing->set_user( $user_id );
-
-			// Process Custom HivePress Attributes
-			foreach ( $field_values as $key => $val ) {
-				if ( in_array( $key, [ 'title', 'description', 'id', 'user', 'images', 'categories', 'featured', 'verified' ], true ) ) {
-					continue;
-				}
-
-				if ( ! isset( $mappable_fields[ $key ] ) ) {
-					continue;
-				}
-
-				$field_def = $mappable_fields[ $key ];
-				$field_obj = isset( $field_def['field_obj'] ) ? $field_def['field_obj'] : null;
-
-				if ( $field_obj && is_array( $field_obj->get_arg( 'options' ) ) ) {
-					// Select / Multi-Select
-					$matched_options = [];
-					$labels = array_filter( array_map( 'trim', explode( ',', $val ) ) );
-					foreach ( $field_obj->get_arg( 'options' ) as $opt_name => $opt_label ) {
-						$opt_label_text = is_array( $opt_label ) && isset( $opt_label['label'] ) ? $opt_label['label'] : (string) $opt_label;
-						if ( in_array( html_entity_decode( $opt_label_text ), $labels, true ) || in_array( (string) $opt_name, $labels, true ) ) {
-							$matched_options[] = $opt_name;
-						}
-					}
-					if ( $field_obj->is_multiple() ) {
-						$listing->set_value( $key, $matched_options );
-					} elseif ( ! empty( $matched_options ) ) {
-						$listing->set_value( $key, $matched_options[0] );
-					}
-				} else {
-					$listing->set_value( $key, sanitize_text_field( $val ) );
-				}
-			}
-
-			// Save listing instance
-			$save_fields = array_keys( $field_values );
-			$save_fields = array_merge( $save_fields, [ 'title', 'description', 'user', 'status', 'categories', 'featured', 'verified' ] );
-
-if ( ! $listing->save( array_unique( $save_fields ) ) ) {
-				$stats['failed']++;
-				$errs = $listing->_get_errors();
-				$stats['errors'][ $row_index ][] = ! empty( $errs ) ? implode( '; ', $errs ) : __( 'Failed to save listing record.', 'pb-hivepress-import' );
-				continue;
-			}
-
-// Process Custom HivePress Attributes / Map to Existing Fields
-			foreach ( $field_values as $key => $val ) {
-				if ( in_array( $key, [ 'title', 'description', 'id', 'user', 'images', 'categories', 'featured', 'verified' ], true ) ) {
-					continue;
-				}
-
-				// Explicit mapping of common CSV columns to existing HivePress fields
-				$explicit_mapping = [
-					'name'        => 'title',
-					'about'       => 'description',
-					'website'     => 'url',  // URL field
-					'latitude'    => 'hp_latitude',  // if Geolocation extension active
-					'longitude'   => 'hp_longitude',  // if Geolocation extension active
-				];
-
-				// Check explicit mapping first
-				if ( array_key_exists( $key, $explicit_mapping ) ) {
-					$mapped_field = $explicit_mapping[ $key ];
-					if ( $mapped_field === null ) {
-						// Save as hp_import_* meta
-						update_post_meta( $listing->get_id(), 'hp_import_' . $key, sanitize_text_field( $val ) );
-						continue;
-					}
-					// Use the mapped existing field
-					$key = $mapped_field;
-					// Fall through to normal mappable_fields processing
-				}
-
-				if ( ! isset( $mappable_fields[ $key ] ) ) {
-					// Save as hp_import_* meta for unrecognized fields
-					update_post_meta( $listing->get_id(), 'hp_import_' . $key, sanitize_text_field( $val ) );
-					continue;
-				}
-
-				$field_def = $mappable_fields[ $key ];
-				$field_obj = isset( $field_def['field_obj'] ) ? $field_def['field_obj'] : null;
-
-				if ( $field_obj && is_array( $field_obj->get_arg( 'options' ) ) ) {
-					// Select / Multi-Select
-					$matched_options = [];
-					$labels = array_filter( array_map( 'trim', explode( ',', $val ) ) );
-					foreach ( $field_obj->get_arg( 'options' ) as $opt_name => $opt_label ) {
-						$opt_label_text = is_array( $opt_label ) && isset( $opt_label['label'] ) ? $opt_label['label'] : (string) $opt_label;
-						if ( in_array( html_entity_decode( $opt_label_text ), $labels, true ) || in_array( (string) $opt_name, $labels, true ) ) {
-							$matched_options[] = $opt_name;
-						}
-					}
-					if ( $field_obj->is_multiple() ) {
-						$listing->set_value( $key, $matched_options );
-					} elseif ( ! empty( $matched_options ) ) {
-						$listing->set_value( $key, $matched_options[0] );
-					}
-				} else {
-					$listing->set_value( $key, sanitize_text_field( $val ) );
-				}
-			}
-			if ( ! empty( $field_values['images'] ) ) {
-				$img_urls = array_filter( array_map( 'trim', explode( ',', $field_values['images'] ) ) );
-				$downloaded_attachment_ids = [];
-
-				foreach ( $img_urls as $img_idx => $img_url ) {
-					$att_id = Image_Handler::sideload_image( $img_url, $listing->get_id(), 'images' );
-
-					if ( is_wp_error( $att_id ) ) {
-						$stats['errors'][ $row_index ][] = sprintf(
-							/* translators: 1: url, 2: error message */
-							__( 'Image error for "%1$s": %2$s', 'pb-hivepress-import' ),
-							esc_url( $img_url ),
-							$att_id->get_error_message()
-						);
-					} else {
-						$downloaded_attachment_ids[] = $att_id;
-
-						// Link first image as Featured / Thumbnail
-						if ( 0 === $img_idx ) {
-							set_post_thumbnail( $listing->get_id(), $att_id );
-							$listing->set_image( $att_id );
-						}
-					}
-				}
-
-				if ( ! empty( $downloaded_attachment_ids ) ) {
-					// Attach gallery images to listing model
-					$existing_images = (array) $listing->get_images__id();
-					$all_images      = array_unique( array_merge( $existing_images, $downloaded_attachment_ids ) );
-					$listing->set_images( $all_images );
-					$listing->save( [ 'image', 'images' ] );
-
-					// Flush HivePress attachment cache for this listing
-					hivepress()->cache->delete_post_cache( $listing->get_id(), 'image_ids', 'models/attachment' );
-				}
-			}
-
-			if ( $is_new ) {
+			} elseif ( 'created' === $result['result'] ) {
 				$stats['created']++;
 			} else {
 				$stats['updated']++;
@@ -497,6 +291,236 @@ if ( ! $listing->save( array_unique( $save_fields ) ) ) {
 		return [
 			'success' => true,
 			'stats'   => $stats,
+		];
+	}
+
+	/**
+	 * Import a single CSV row as a listing.
+	 *
+	 * Maps CSV values onto a Listing model using HivePress `fill()` (magic
+	 * `set_<field>()`), which writes to the correct post fields, term
+	 * relationships and `hp_*` meta keys for custom attributes.
+	 *
+	 * @param array $row CSV row values.
+	 * @param array $field_to_col Map of field_key => column_index.
+	 * @param array $mappable_fields Field definitions from get_mappable_fields().
+	 * @param string $mode Import mode ('create', 'update', 'append').
+	 * @param int $category_id Optional blanket category ID.
+	 * @return array { result: 'created'|'updated'|'failed', errors: string[] }
+	 */
+	private static function import_row( $row, $field_to_col, $mappable_fields, $mode, $category_id ) {
+		$listing_errors = [];
+
+		// Map row values into a field array, converting select option labels to values.
+		$field_values = [];
+		foreach ( $field_to_col as $field_key => $col_idx ) {
+			if ( ! isset( $row[ $col_idx ] ) ) {
+				continue;
+			}
+
+			$val       = trim( $row[ $col_idx ] );
+			$field_obj = isset( $mappable_fields[ $field_key ]['field_obj'] ) ? $mappable_fields[ $field_key ]['field_obj'] : null;
+
+			if ( $field_obj && is_array( $field_obj->get_arg( 'options' ) ) ) {
+				$matched_options = [];
+				$labels          = array_filter( array_map( 'trim', explode( ',', $val ) ) );
+
+				foreach ( $field_obj->get_arg( 'options' ) as $opt_name => $opt_label ) {
+					$opt_label_text = is_array( $opt_label ) && isset( $opt_label['label'] ) ? $opt_label['label'] : (string) $opt_label;
+					$opt_label_text = html_entity_decode( $opt_label_text );
+
+					if ( in_array( $opt_label_text, $labels, true ) || in_array( (string) $opt_name, $labels, true ) ) {
+						$matched_options[] = $opt_name;
+					}
+				}
+
+				// Select fields expose "multiple" as an arg; is_multiple() only exists on upload fields.
+				if ( $field_obj->get_arg( 'multiple' ) ) {
+					$field_values[ $field_key ] = $matched_options;
+				} elseif ( ! empty( $matched_options ) ) {
+					$field_values[ $field_key ] = $matched_options[0];
+				}
+
+				continue;
+			}
+
+			$field_values[ $field_key ] = $val;
+		}
+
+		// Validate mandatory fields.
+		if ( empty( $field_values['title'] ) && 'update' !== $mode ) {
+			return [
+				'result' => 'failed',
+				'errors' => [ __( 'Missing Title for new listing.', 'pb-hivepress-import' ) ],
+			];
+		}
+
+		// Resolve author/user.
+		$user_id = get_current_user_id();
+		if ( ! empty( $field_values['user'] ) ) {
+			$user = is_email( $field_values['user'] )
+				? get_user_by( 'email', $field_values['user'] )
+				: get_user_by( 'login', $field_values['user'] );
+
+			if ( $user ) {
+				$user_id = $user->ID;
+			}
+		}
+
+		// Fall back to an administrator so rows never fail on the required
+		// author field (e.g. when running via WP-CLI or a cron context).
+		if ( empty( $user_id ) ) {
+			$admins = get_users( [
+				'role'   => 'administrator',
+				'number' => 1,
+				'fields' => 'ID',
+			] );
+			if ( ! empty( $admins ) ) {
+				$user_id = (int) $admins[0];
+			}
+		}
+
+		// Handle Listing Lookup (Update vs Create).
+		$listing    = null;
+		$listing_id = ! empty( $field_values['id'] ) ? absint( $field_values['id'] ) : 0;
+
+		if ( $listing_id ) {
+			$listing = Models\Listing::query()->get_by_id( $listing_id );
+		}
+
+		if ( 'update' === $mode && ! $listing ) {
+			return [
+				'result' => 'failed',
+				'errors' => [ sprintf(
+					/* translators: %d: listing ID */
+					__( 'Listing ID %d not found for update.', 'pb-hivepress-import' ),
+					$listing_id
+				) ],
+			];
+		}
+
+		$is_new = false;
+		if ( ! $listing ) {
+			$is_new  = true;
+			$listing = new Models\Listing();
+
+			if ( $category_id ) {
+				$listing->set_categories( [ $category_id ] );
+			}
+
+			// Load attribute fields onto the new (unsaved) model. Custom
+			// attributes are only attached to the model inside set_id(), so
+			// without this call fill()/set_*() on attributes is a no-op.
+			$listing->set_id( null );
+		}
+
+		// Resolve category names/slugs/IDs from CSV to term IDs.
+		$cat_ids = [];
+		if ( $category_id ) {
+			$cat_ids[] = $category_id;
+		}
+		if ( ! empty( $field_values['categories'] ) ) {
+			$cat_parts = array_filter( array_map( 'trim', explode( ',', (string) $field_values['categories'] ) ) );
+			foreach ( $cat_parts as $part ) {
+				if ( is_numeric( $part ) ) {
+					$cat_ids[] = absint( $part );
+					continue;
+				}
+				$term = get_term_by( 'name', $part, 'hp_listing_category' );
+				if ( ! $term ) {
+					$term = get_term_by( 'slug', $part, 'hp_listing_category' );
+				}
+				if ( $term ) {
+					$cat_ids[] = $term->term_id;
+				}
+			}
+		}
+		$field_values['categories'] = array_values( array_unique( $cat_ids ) );
+
+		// Extract remote images (handled separately after save).
+		$image_urls = ! empty( $field_values['images'] ) ? $field_values['images'] : '';
+		unset( $field_values['images'] );
+
+		unset( $field_values['id'] );
+
+		// HivePress enforces a required description; fall back to title for new listings.
+		if ( $is_new && empty( $field_values['description'] ) ) {
+			$field_values['description'] = ! empty( $field_values['title'] )
+				? sanitize_text_field( $field_values['title'] )
+				: __( 'No description provided.', 'pb-hivepress-import' );
+		}
+
+		// Normalize boolean flags.
+		foreach ( [ 'featured', 'verified' ] as $flag_key ) {
+			if ( isset( $field_values[ $flag_key ] ) ) {
+				$field_values[ $flag_key ] = in_array( strtolower( (string) $field_values[ $flag_key ] ), [ '1', 'true', 'yes' ], true );
+			}
+		}
+
+		// Publish new listings.
+		if ( $is_new ) {
+			$field_values['status'] = 'publish';
+		}
+
+		// Ensure author is set.
+		$field_values['user'] = $user_id;
+
+		// Fill the model (magic set_<field>() → correct fields, terms and meta).
+		$listing->fill( $field_values );
+
+		$save_names = array_unique( array_merge(
+			array_keys( $field_values ),
+			[ 'title', 'description', 'user', 'status', 'categories', 'featured', 'verified', 'image', 'images' ]
+		) );
+
+		if ( ! $listing->save( $save_names ) ) {
+			$errs = $listing->_get_errors();
+			return [
+				'result' => 'failed',
+				'errors' => [ ! empty( $errs ) ? implode( '; ', $errs ) : __( 'Failed to save listing record.', 'pb-hivepress-import' ) ],
+			];
+		}
+
+		// Process images with smart MIME sideloading.
+		if ( ! empty( $image_urls ) ) {
+			$img_urls                  = array_filter( array_map( 'trim', explode( ',', $image_urls ) ) );
+			$downloaded_attachment_ids = [];
+
+			foreach ( $img_urls as $img_idx => $img_url ) {
+				$att_id = Image_Handler::sideload_image( $img_url, $listing->get_id(), 'images' );
+
+				if ( is_wp_error( $att_id ) ) {
+					$listing_errors[] = sprintf(
+						/* translators: 1: url, 2: error message */
+						__( 'Image error for "%1$s": %2$s', 'pb-hivepress-import' ),
+						esc_url( $img_url ),
+						$att_id->get_error_message()
+					);
+				} else {
+					$downloaded_attachment_ids[] = $att_id;
+
+					// Link first image as Featured / Thumbnail.
+					if ( 0 === $img_idx ) {
+						set_post_thumbnail( $listing->get_id(), $att_id );
+						$listing->set_image( $att_id );
+					}
+				}
+			}
+
+			if ( ! empty( $downloaded_attachment_ids ) ) {
+				$existing_images = (array) $listing->get_images__id();
+				$all_images      = array_unique( array_merge( $existing_images, $downloaded_attachment_ids ) );
+				$listing->set_images( $all_images );
+				$listing->save( [ 'image', 'images' ] );
+
+				// Flush HivePress attachment cache for this listing.
+				hivepress()->cache->delete_post_cache( $listing->get_id(), 'image_ids', 'models/attachment' );
+			}
+		}
+
+		return [
+			'result' => $is_new ? 'created' : 'updated',
+			'errors' => $listing_errors,
 		];
 	}
 
@@ -550,7 +574,7 @@ if ( ! $listing->save( array_unique( $save_fields ) ) ) {
 		}
 
 		// Read header
-		$header = fgetcsv( $file, 0, $delimiter );
+		$header = fgetcsv( $file, 0, $delimiter, '"', '\\' );
 		if ( ! $header ) {
 			fclose( $file );
 			return [
@@ -588,194 +612,25 @@ if ( ! $listing->save( array_unique( $save_fields ) ) ) {
 		$rows_processed_in_chunk = 0;
 
 		// Iterate through rows (limited to chunk_size)
-		while ( ( $row = fgetcsv( $file, 0, $delimiter ) ) !== false && $rows_processed_in_chunk < $chunk_size ) {
+		while ( ( $row = fgetcsv( $file, 0, $delimiter, '"', '\\' ) ) !== false && $rows_processed_in_chunk < $chunk_size ) {
 			$row_index++;
 			$stats['total_rows']++;
 
 			// Skip completely empty lines
 			if ( empty( array_filter( $row ) ) ) {
-				continue;
-			}
-
-			// Map row values into field array
-			$field_values = [];
-			foreach ( $field_to_col as $field_key => $col_idx ) {
-				if ( isset( $row[ $col_idx ] ) ) {
-					$field_values[ $field_key ] = trim( $row[ $col_idx ] );
-				}
-			}
-
-			// Validate mandatory fields
-			if ( empty( $field_values['title'] ) && 'update' !== $mode ) {
-				$stats['failed']++;
-				$stats['errors'][ $row_index ][] = __( 'Missing Title for new listing.', 'pb-hivepress-import' );
 				$rows_processed_in_chunk++;
 				continue;
 			}
 
-			// Resolve author/user
-			$user_id = get_current_user_id();
-			if ( ! empty( $field_values['user'] ) ) {
-				$user = is_email( $field_values['user'] )
-					? get_user_by( 'email', $field_values['user'] )
-					: get_user_by( 'login', $field_values['user'] );
+			$result = self::import_row( $row, $field_to_col, $mappable_fields, $mode, $category_id );
 
-				if ( $user ) {
-					$user_id = $user->ID;
-				}
-			}
-			$field_values['user'] = $user_id;
-
-			// Handle Listing Lookup (Update vs Create)
-			$listing = null;
-			$listing_id = ! empty( $field_values['id'] ) ? absint( $field_values['id'] ) : 0;
-
-			if ( $listing_id ) {
-				$listing = Models\Listing::query()->get_by_id( $listing_id );
+			if ( ! empty( $result['errors'] ) ) {
+				$stats['errors'][ $row_index ] = $result['errors'];
 			}
 
-			if ( 'update' === $mode && ! $listing ) {
+			if ( 'failed' === $result['result'] ) {
 				$stats['failed']++;
-				$stats['errors'][ $row_index ][] = sprintf(
-					__( 'Listing ID %d not found for update.', 'pb-hivepress-import' ),
-					$listing_id
-				);
-				$rows_processed_in_chunk++;
-				continue;
-			}
-
-			$is_new = false;
-			if ( ! $listing ) {
-				$is_new  = true;
-				$listing = new Models\Listing();
-				$listing->set_status( 'publish' );
-			}
-
-			// Categories
-			$cat_ids = [];
-			if ( $category_id ) {
-				$cat_ids[] = $category_id;
-			}
-			if ( ! empty( $field_values['categories'] ) ) {
-				$cat_parts = array_filter( array_map( 'trim', explode( ',', $field_values['categories'] ) ) );
-				foreach ( $cat_parts as $part ) {
-					if ( is_numeric( $part ) ) {
-						$cat_ids[] = absint( $part );
-					} else {
-						$term = get_term_by( 'name', $part, 'hp_listing_category' );
-						if ( ! $term ) {
-							$term = get_term_by( 'slug', $part, 'hp_listing_category' );
-						}
-						if ( $term ) {
-							$cat_ids[] = $term->term_id;
-						}
-					}
-				}
-			}
-			if ( ! empty( $cat_ids ) ) {
-				$listing->set_categories( array_unique( $cat_ids ) );
-			}
-
-			// Core standard attributes
-			if ( isset( $field_values['title'] ) ) {
-				$listing->set_title( sanitize_text_field( $field_values['title'] ) );
-			}
-			$description = isset( $field_values['description'] ) ? trim( $field_values['description'] ) : '';
-			if ( empty( $description ) && $is_new ) {
-				$description = ! empty( $field_values['title'] ) ? sanitize_text_field( $field_values['title'] ) : __( 'No description provided.', 'pb-hivepress-import' );
-			}
-			$listing->set_description( wp_kses_post( $description ) );
-			if ( isset( $field_values['featured'] ) ) {
-				$listing->set_featured( in_array( strtolower( (string) $field_values['featured'] ), [ '1', 'true', 'yes' ], true ) );
-			}
-			if ( isset( $field_values['verified'] ) ) {
-				$listing->set_verified( in_array( strtolower( (string) $field_values['verified'] ), [ '1', 'true', 'yes' ], true ) );
-			}
-			$listing->set_user( $user_id );
-
-			// Process Custom HivePress Attributes
-			foreach ( $field_values as $key => $val ) {
-				if ( in_array( $key, [ 'title', 'description', 'id', 'user', 'images', 'categories', 'featured', 'verified' ], true ) ) {
-					continue;
-				}
-
-				if ( ! isset( $mappable_fields[ $key ] ) ) {
-					continue;
-				}
-
-				$field_def = $mappable_fields[ $key ];
-				$field_obj = isset( $field_def['field_obj'] ) ? $field_def['field_obj'] : null;
-
-				if ( $field_obj && is_array( $field_obj->get_arg( 'options' ) ) ) {
-					// Select / Multi-Select
-					$matched_options = [];
-					$labels = array_filter( array_map( 'trim', explode( ',', $val ) ) );
-					foreach ( $field_obj->get_arg( 'options' ) as $opt_name => $opt_label ) {
-						$opt_label_text = is_array( $opt_label ) && isset( $opt_label['label'] ) ? $opt_label['label'] : (string) $opt_label;
-						if ( in_array( html_entity_decode( $opt_label_text ), $labels, true ) || in_array( (string) $opt_name, $labels, true ) ) {
-							$matched_options[] = $opt_name;
-						}
-					}
-					if ( $field_obj->is_multiple() ) {
-						$listing->set_value( $key, $matched_options );
-					} elseif ( ! empty( $matched_options ) ) {
-						$listing->set_value( $key, $matched_options[0] );
-					}
-				} else {
-					$listing->set_value( $key, sanitize_text_field( $val ) );
-				}
-			}
-
-			// Save listing instance
-			$save_fields = array_keys( $field_values );
-			$save_fields = array_merge( $save_fields, [ 'title', 'description', 'user', 'status', 'categories', 'featured', 'verified' ] );
-
-			if ( ! $listing->save( array_unique( $save_fields ) ) ) {
-				$stats['failed']++;
-				$errs = $listing->_get_errors();
-				$stats['errors'][ $row_index ][] = ! empty( $errs ) ? implode( '; ', $errs ) : __( 'Failed to save listing record.', 'pb-hivepress-import' );
-				$rows_processed_in_chunk++;
-				continue;
-			}
-
-			// Process Images with Smart MIME Sideloading
-			if ( ! empty( $field_values['images'] ) ) {
-				$img_urls = array_filter( array_map( 'trim', explode( ',', $field_values['images'] ) ) );
-				$downloaded_attachment_ids = [];
-
-				foreach ( $img_urls as $img_idx => $img_url ) {
-					$att_id = Image_Handler::sideload_image( $img_url, $listing->get_id(), 'images' );
-
-					if ( is_wp_error( $att_id ) ) {
-						$stats['errors'][ $row_index ][] = sprintf(
-							__( 'Image error for "%1$s": %2$s', 'pb-hivepress-import' ),
-							esc_url( $img_url ),
-							$att_id->get_error_message()
-						);
-					} else {
-						$downloaded_attachment_ids[] = $att_id;
-
-						// Link first image as Featured / Thumbnail
-						if ( 0 === $img_idx ) {
-							set_post_thumbnail( $listing->get_id(), $att_id );
-							$listing->set_image( $att_id );
-						}
-					}
-				}
-
-				if ( ! empty( $downloaded_attachment_ids ) ) {
-					// Attach gallery images to listing model
-					$existing_images = (array) $listing->get_images__id();
-					$all_images      = array_unique( array_merge( $existing_images, $downloaded_attachment_ids ) );
-					$listing->set_images( $all_images );
-					$listing->save( [ 'image', 'images' ] );
-
-					// Flush HivePress attachment cache for this listing
-					hivepress()->cache->delete_post_cache( $listing->get_id(), 'image_ids', 'models/attachment' );
-				}
-			}
-
-			if ( $is_new ) {
+			} elseif ( 'created' === $result['result'] ) {
 				$stats['created']++;
 			} else {
 				$stats['updated']++;
