@@ -392,14 +392,36 @@ if ( ! $listing->save( array_unique( $save_fields ) ) ) {
 				continue;
 			}
 
-			// Process Custom HivePress Attributes
+// Process Custom HivePress Attributes / Map to Existing Fields
 			foreach ( $field_values as $key => $val ) {
 				if ( in_array( $key, [ 'title', 'description', 'id', 'user', 'images', 'categories', 'featured', 'verified' ], true ) ) {
 					continue;
 				}
 
+				// Explicit mapping of common CSV columns to existing HivePress fields
+				$explicit_mapping = [
+					'name'        => 'title',
+					'about'       => 'description',
+					'website'     => 'url',  // URL field
+					'latitude'    => 'hp_latitude',  // if Geolocation extension active
+					'longitude'   => 'hp_longitude',  // if Geolocation extension active
+				];
+
+				// Check explicit mapping first
+				if ( array_key_exists( $key, $explicit_mapping ) ) {
+					$mapped_field = $explicit_mapping[ $key ];
+					if ( $mapped_field === null ) {
+						// Save as hp_import_* meta
+						update_post_meta( $listing->get_id(), 'hp_import_' . $key, sanitize_text_field( $val ) );
+						continue;
+					}
+					// Use the mapped existing field
+					$key = $mapped_field;
+					// Fall through to normal mappable_fields processing
+				}
+
 				if ( ! isset( $mappable_fields[ $key ] ) ) {
-					// Save unrecognized fields as post meta instead of skipping
+					// Save as hp_import_* meta for unrecognized fields
 					update_post_meta( $listing->get_id(), 'hp_import_' . $key, sanitize_text_field( $val ) );
 					continue;
 				}
