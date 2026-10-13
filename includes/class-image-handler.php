@@ -146,6 +146,99 @@ class Image_Handler {
 	}
 
 	/**
+	 * Download a remote file for a listing attachment attribute, as HivePress Import does.
+	 *
+	 * Unlike sideload_image(), any format allowed by the field is accepted. An
+	 * extensionless image URL still gets its extension from the detected MIME type.
+	 *
+	 * @param string   $url Remote file URL.
+	 * @param int      $post_parent Listing ID.
+	 * @param string   $parent_field HivePress field name.
+	 * @param string[] $formats Allowed file extensions (empty for any allowed by WordPress).
+	 * @return int|\WP_Error Attachment ID on success, or WP_Error on failure.
+	 */
+	public static function sideload_file( $url, $post_parent, $parent_field, $formats = [] ) {
+		$url = esc_url_raw( trim( $url ) );
+
+		if ( empty( $url ) || ! filter_var( $url, FILTER_VALIDATE_URL ) ) {
+			return new \WP_Error( 'invalid_url', __( 'Invalid file URL provided.', 'pb-hivepress-import' ) );
+		}
+
+		/* translators: %s: file extensions. */
+		$format_error = sprintf( __( 'Only %s files are allowed.', 'pb-hivepress-import' ), strtoupper( implode( ', ', (array) $formats ) ) );
+
+		// Reuse an attachment previously imported from this URL, if it suits this field.
+		$existing_id = self::find_reusable_attachment( md5( $url ), $post_parent );
+
+		if ( $existing_id ) {
+			$existing_path = get_attached_file( $existing_id );
+
+			if ( ! $formats || ( $existing_path && hivepress()->attachment->is_valid_file( $existing_path, basename( $existing_path ), $formats ) ) ) {
+				wp_update_post( [
+					'ID'          => $existing_id,
+					'post_parent' => $post_parent,
+				] );
+				update_post_meta( $existing_id, 'hp_parent_model', 'listing' );
+				update_post_meta( $existing_id, 'hp_parent_field', sanitize_key( $parent_field ) );
+
+				return $existing_id;
+			}
+		}
+
+		require_once ABSPATH . 'wp-admin/includes/image.php';
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/media.php';
+
+		$tmp_file = download_url( $url );
+
+		if ( is_wp_error( $tmp_file ) ) {
+			return $tmp_file;
+		}
+
+		$filename = sanitize_file_name( basename( (string) wp_parse_url( $url, PHP_URL_PATH ) ) );
+
+		if ( ! pathinfo( $filename, PATHINFO_EXTENSION ) ) {
+			$ext = self::get_extension_for_mime( self::detect_mime_type( $tmp_file ) );
+
+			if ( $ext ) {
+				$filename = self::generate_filename( $url, $ext );
+			}
+		}
+
+		if ( ! $filename ) {
+			@unlink( $tmp_file );
+			return new \WP_Error( 'invalid_name', __( 'Invalid file name.', 'pb-hivepress-import' ) );
+		}
+
+		if ( $formats && ! hivepress()->attachment->is_valid_file( $tmp_file, $filename, $formats ) ) {
+			@unlink( $tmp_file );
+			return new \WP_Error( 'invalid_format', $format_error );
+		}
+
+		$attachment_id = media_handle_sideload(
+			[
+				'name'     => $filename,
+				'tmp_name' => $tmp_file,
+			],
+			$post_parent
+		);
+
+		if ( file_exists( $tmp_file ) ) {
+			@unlink( $tmp_file );
+		}
+
+		if ( is_wp_error( $attachment_id ) ) {
+			return $attachment_id;
+		}
+
+		update_post_meta( $attachment_id, 'hp_parent_model', 'listing' );
+		update_post_meta( $attachment_id, 'hp_parent_field', sanitize_key( $parent_field ) );
+		update_post_meta( $attachment_id, '_hp_import_source_hash', md5( $url ) );
+
+		return $attachment_id;
+	}
+
+	/**
 	 * Find an existing imported attachment with the given source hash that can be
 	 * attached to the given post.
 	 *

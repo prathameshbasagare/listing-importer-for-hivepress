@@ -141,12 +141,30 @@ class Admin_Page {
 	}
 
 	/**
+	 * Build the error shown when required fields are not mapped.
+	 *
+	 * @param string[] $labels Field labels.
+	 * @return string
+	 */
+	protected static function get_missing_fields_message( $labels ) {
+		/* translators: %s: field labels. */
+		return sprintf( __( 'Please select a CSV column for these required fields: %s.', 'pb-hivepress-import' ), implode( ', ', $labels ) );
+	}
+
+	/**
 	 * AJAX: store the column mapping and reset progress before chunked import.
 	 */
 	public static function ajax_import_start() {
 		$session = self::verify_ajax_request();
 
-		$session['mappings']       = ! empty( $_POST['mapping'] ) && is_array( $_POST['mapping'] ) ? array_map( 'sanitize_text_field', wp_unslash( $_POST['mapping'] ) ) : [];
+		$mappings = ! empty( $_POST['mapping'] ) && is_array( $_POST['mapping'] ) ? array_map( 'sanitize_text_field', wp_unslash( $_POST['mapping'] ) ) : [];
+		$missing  = Importer::get_unmapped_required_fields( Importer::get_mappable_fields( $session['category_id'], $session['mode'] ), $mappings );
+
+		if ( $missing ) {
+			wp_send_json_error( [ 'message' => self::get_missing_fields_message( $missing ) ] );
+		}
+
+		$session['mappings']       = $mappings;
 		$session['total_rows']     = Importer::count_rows( $session['file_path'], $session['delimiter'] );
 		$session['offset']         = 0;
 		$session['row_index']      = 1;
@@ -314,6 +332,12 @@ class Admin_Page {
 			}
 
 			$mappings = ! empty( $_POST['mapping'] ) && is_array( $_POST['mapping'] ) ? array_map( 'sanitize_text_field', wp_unslash( $_POST['mapping'] ) ) : [];
+			$missing  = Importer::get_unmapped_required_fields( Importer::get_mappable_fields( $session['category_id'], $session['mode'] ), $mappings );
+
+			if ( $missing ) {
+				add_settings_error( 'hp_import', 'unmapped_required', self::get_missing_fields_message( $missing ) );
+				return;
+			}
 
 			$result = Importer::process( [
 				'file_path'   => $session['file_path'],
@@ -467,6 +491,7 @@ class Admin_Page {
 
 		$columns = Importer::get_csv_columns( $session['file_path'], $session['delimiter'] );
 		$fields  = Importer::get_mappable_fields( $session['category_id'], $session['mode'] );
+		$posted  = ! empty( $_POST['mapping'] ) && is_array( $_POST['mapping'] ) ? array_map( 'sanitize_text_field', wp_unslash( $_POST['mapping'] ) ) : [];
 		?>
 		<div class="hp-card">
 			<h2><span class="hp-step-badge"><?php esc_html_e( 'Step 2', 'pb-hivepress-import' ); ?></span> <?php esc_html_e( 'Map Columns', 'pb-hivepress-import' ); ?></h2>
@@ -499,10 +524,12 @@ class Admin_Page {
 									<?php endif; ?>
 								</td>
 								<td>
-									<select name="mapping[<?php echo esc_attr( $field_key ); ?>]" class="hp-col-select">
-										<option value="none"><?php esc_html_e( '— None (Do not import) —', 'pb-hivepress-import' ); ?></option>
+									<select name="mapping[<?php echo esc_attr( $field_key ); ?>]" class="hp-col-select" <?php echo $is_req ? 'required' : ''; ?>>
+										<option value=""><?php esc_html_e( '— None (Do not import) —', 'pb-hivepress-import' ); ?></option>
 										<?php
-										$has_selected = false;
+										// Keep the submitted choice when the mapping is shown again after a validation error.
+										$posted_col   = isset( $posted[ $field_key ] ) ? (string) $posted[ $field_key ] : null;
+										$has_selected = null !== $posted_col;
 										foreach ( $columns as $idx => $raw_col ) :
 											$clean_col_name = strtolower( trim( $raw_col ) );
 											$readable_label = Importer::format_column_label( $raw_col );
@@ -528,7 +555,7 @@ class Admin_Page {
 												$is_match = true;
 											}
 
-											$selected = false;
+											$selected = null !== $posted_col && (string) $idx === $posted_col;
 											if ( ! $has_selected && $is_match ) {
 												$selected = true;
 												$has_selected = true;

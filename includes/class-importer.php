@@ -50,107 +50,81 @@ class Importer {
 	/**
 	 * Get all available HivePress listing fields and custom attributes.
 	 *
+	 * Mirrors HivePress Import (`hivepress()->import->get_fields()`): the import
+	 * fields are passed into the listing edit form, so their definitions are
+	 * merged with the listing model, and HivePress adds every "Editable"
+	 * attribute for the selected category (or all categories). Labels, required
+	 * flags and order therefore come from HivePress itself.
+	 *
 	 * @param int $category_id Optional category ID for category-specific attributes.
 	 * @param string $mode Import mode ('create', 'update', 'append').
-	 * @return array Array of field definitions.
+	 * @return array Array of field definitions, keyed by field name.
 	 */
 	public static function get_mappable_fields( $category_id = 0, $mode = 'create' ) {
-		$fields = [];
+		$import_fields = [];
+		$listing       = null;
 
-		// Listing ID for updates
 		if ( 'create' !== $mode ) {
-			$fields['id'] = [
-				'label'       => __( 'Listing ID', 'pb-hivepress-import' ),
-				'description' => __( 'Select the CSV column containing the Listing ID for updating existing records.', 'pb-hivepress-import' ),
+
+			// Add ID field.
+			$import_fields['id'] = [
+				'label'       => __( 'ID', 'pb-hivepress-import' ),
+				'description' => __( 'Select the ID column for updating existing listings.', 'pb-hivepress-import' ),
+				'type'        => 'id',
 				'required'    => true,
 				'_order'      => 1,
 			];
 		}
 
-		// Title
-		$fields['title'] = [
-			'label'       => __( 'Title', 'hivepress' ),
-			'description' => __( 'The main title or name of the listing.', 'hivepress' ),
-			'required'    => ( 'update' !== $mode ),
-			'_order'      => 10,
-		];
+		if ( $category_id ) {
 
-		// Category (if not pre-selected blanket category in Step 1)
-		if ( ! $category_id ) {
-			$fields['categories'] = [
-				'label'       => __( 'Categories', 'hivepress' ),
-				'description' => __( 'Category names, slugs, or IDs (comma-separated for multiple).', 'pb-hivepress-import' ),
-				'required'    => true,
-				'_order'      => 20,
+			// Load the category's attributes onto the model.
+			$listing = ( new Models\Listing() )->set_categories( [ $category_id ] );
+			$listing->set_id( null );
+		} else {
+
+			// Add category field.
+			$import_fields['categories'] = [
+				'required' => true,
+				'_order'   => 5,
 			];
 		}
 
-		// Images
-		$fields['images'] = [
-			'label'       => __( 'Images', 'hivepress' ),
-			'description' => __( 'Image URLs (comma-separated). Supports extensionless CDN/Unsplash URLs with automatic format detection.', 'pb-hivepress-import' ),
-			'required'    => false,
-			'_order'      => 30,
-		];
+		if ( current_user_can( 'import' ) ) {
 
-		// Description
-		$fields['description'] = [
-			'label'       => __( 'Description', 'hivepress' ),
-			'description' => __( 'The full text content or description of the listing.', 'hivepress' ),
-			'required'    => true,
-			'_order'      => 40,
-		];
+			// Add admin fields.
+			$import_fields = array_merge(
+				$import_fields,
+				[
+					'featured' => [
+						'_order' => 1000,
+					],
 
-		// Author / User
-		$fields['user'] = [
-			'label'       => __( 'Author / User', 'pb-hivepress-import' ),
-			'description' => __( 'Username or email address. Defaults to current admin if empty.', 'pb-hivepress-import' ),
-			'required'    => false,
-			'_order'      => 50,
-		];
+					'verified' => [
+						'_order' => 1010,
+					],
 
-		// Featured & Verified
-		$fields['featured'] = [
-			'label'       => __( 'Featured', 'hivepress' ),
-			'description' => __( 'Accepts "1", "true", "yes", or empty.', 'pb-hivepress-import' ),
-			'required'    => false,
-			'_order'      => 60,
-		];
-		$fields['verified'] = [
-			'label'       => __( 'Verified', 'hivepress' ),
-			'description' => __( 'Accepts "1", "true", "yes", or empty.', 'pb-hivepress-import' ),
-			'required'    => false,
-			'_order'      => 70,
-		];
-
-		// Instantiate listing model to fetch any custom attributes defined in HivePress Attributes.
-		// Like the official HivePress Import, only fields on the listing edit form
-		// (attributes marked "Editable") are offered for mapping.
-		$listing = new Models\Listing();
-		if ( $category_id ) {
-			$listing->set_categories( [ $category_id ] );
-
-			// Load the category's attributes onto the model (same as HivePress Import).
-			$listing->set_id( null );
+					'user'     => [
+						'label'       => hivepress()->translator->get_string( 'user' ),
+						'description' => __( 'Accepts usernames or email addresses.', 'pb-hivepress-import' ),
+						'required'    => false,
+						'_order'      => 2,
+					],
+				]
+			);
 		}
 
-		if ( class_exists( '\HivePress\Forms\Listing_Update' ) ) {
-			$form_fields = ( new \HivePress\Forms\Listing_Update( [
-				'model' => $listing,
-			] ) )->get_fields();
-
-			foreach ( $form_fields as $name => $field ) {
-				if ( ! isset( $fields[ $name ] ) && $field->get_label() ) {
-					$fields[ $name ] = [
-						'label'       => $field->get_label(),
-						'description' => $field->get_description(),
-						'required'    => $field->is_required(),
-						'field_obj'   => $field,
-						'_order'      => 100,
-					];
-				}
+		$form_fields = array_filter(
+			( new \HivePress\Forms\Listing_Update(
+				[
+					'fields' => $import_fields,
+					'model'  => $listing,
+				]
+			) )->get_fields(),
+			function( $field ) {
+				return $field->get_label();
 			}
-		}
+		);
 
 		/**
 		 * Filters extra listing attributes offered for mapping although they are
@@ -165,23 +139,110 @@ class Importer {
 			$model_fields = ( new Models\Listing() )->set_id( null )->_get_fields();
 
 			foreach ( $extra_names as $name ) {
-				if ( isset( $fields[ $name ] ) || ! isset( $model_fields[ $name ] ) ) {
-					continue;
+				if ( ! isset( $form_fields[ $name ] ) && isset( $model_fields[ $name ] ) && $model_fields[ $name ]->get_label() ) {
+					$form_fields[ $name ] = $model_fields[ $name ];
 				}
-
-				$field = $model_fields[ $name ];
-
-				$fields[ $name ] = [
-					'label'       => $field->get_label(),
-					'description' => $field->get_description(),
-					'required'    => false,
-					'field_obj'   => $field,
-					'_order'      => 110,
-				];
 			}
 		}
 
+		$fields = [];
+
+		foreach ( $form_fields as $name => $field ) {
+			$fields[ $name ] = [
+				'label'       => $field->get_label(),
+				'description' => self::get_field_description( $field ),
+				'required'    => $field->is_required(),
+				'field_obj'   => $field,
+			];
+		}
+
 		return $fields;
+	}
+
+	/**
+	 * Get the mapping hint shown under a field, as in HivePress Import.
+	 *
+	 * @param object $field Field object.
+	 * @return string
+	 */
+	public static function get_field_description( $field ) {
+		$field_type = $field::get_meta( 'name' );
+
+		if ( in_array( $field->get_name(), [ 'id', 'user' ], true ) ) {
+			return $field->get_description();
+		}
+
+		if ( 'categories' === $field->get_name() ) {
+
+			// Categories are resolved by name, slug or ID rather than by option label.
+			return __( 'Accepts category names, slugs or IDs (comma-separated).', 'pb-hivepress-import' );
+		}
+
+		if ( is_array( $field->get_arg( 'options' ) ) ) {
+			$field_labels = array_map(
+				function( $option ) {
+					return hp\get_array_value( $option, 'label', $option );
+				},
+				$field->get_arg( 'options' )
+			);
+
+			/* translators: %s: option labels. */
+			return sprintf( __( 'Accepts any of these values: %s.', 'pb-hivepress-import' ), implode( ', ', $field_labels ) );
+		}
+
+		switch ( $field_type ) {
+			case 'attachment_upload':
+				/* translators: %s: file formats. */
+				return sprintf( __( 'Accepts URLs of these file formats: %s.', 'pb-hivepress-import' ), strtoupper( implode( ', ', $field->get_formats() ) ) );
+
+			case 'date':
+				$field_format = 'Y-m-d';
+
+				if ( $field->get_arg( 'format' ) ) {
+					$field_format = $field->get_arg( 'format' );
+				} elseif ( $field->get_arg( 'time' ) ) {
+					$field_format .= ' H:i:s';
+				}
+
+				/* translators: %s: date format. */
+				return sprintf( __( 'Accepts dates in "%s" format.', 'pb-hivepress-import' ), $field_format );
+
+			case 'embed':
+				return __( 'Accepts the embed URLs.', 'pb-hivepress-import' );
+
+			case 'checkbox':
+				/* translators: %s: allowed value. */
+				return sprintf( __( 'Accepts "%s" or empty values.', 'pb-hivepress-import' ), 1 );
+
+			case 'time':
+				return __( 'Accepts times in seconds.', 'pb-hivepress-import' );
+
+			case 'url':
+				return __( 'Accepts URLs.', 'pb-hivepress-import' );
+		}
+
+		return '';
+	}
+
+	/**
+	 * Get labels of required fields that are not mapped to a CSV column.
+	 *
+	 * @param array $fields Field definitions from get_mappable_fields().
+	 * @param array $mappings Map of field_key => column index or 'none'.
+	 * @return string[]
+	 */
+	public static function get_unmapped_required_fields( $fields, $mappings ) {
+		$labels = [];
+
+		foreach ( $fields as $name => $field ) {
+			$col_idx = isset( $mappings[ $name ] ) ? $mappings[ $name ] : 'none';
+
+			if ( ! empty( $field['required'] ) && ! ( is_numeric( $col_idx ) && (int) $col_idx >= 0 ) ) {
+				$labels[] = $field['label'];
+			}
+		}
+
+		return $labels;
 	}
 
 	/**
@@ -305,7 +366,8 @@ class Importer {
 			$val       = trim( $row[ $col_idx ] );
 			$field_obj = isset( $mappable_fields[ $field_key ]['field_obj'] ) ? $mappable_fields[ $field_key ]['field_obj'] : null;
 
-			if ( $field_obj && is_array( $field_obj->get_arg( 'options' ) ) ) {
+			// Categories are resolved by name, slug or ID below.
+			if ( $field_obj && 'categories' !== $field_key && is_array( $field_obj->get_arg( 'options' ) ) ) {
 				$matched_options = [];
 				$labels          = array_filter( array_map( 'trim', explode( ',', $val ) ) );
 
@@ -332,10 +394,10 @@ class Importer {
 		}
 
 		// Validate mandatory fields.
-		if ( empty( $field_values['title'] ) && 'update' !== $mode ) {
+		if ( empty( $field_values['title'] ) ) {
 			return [
 				'result' => 'failed',
-				'errors' => [ __( 'Missing Title for new listing.', 'pb-hivepress-import' ) ],
+				'errors' => [ __( 'Missing Title.', 'pb-hivepress-import' ) ],
 			];
 		}
 
@@ -425,6 +487,17 @@ class Importer {
 		$image_urls = ! empty( $field_values['images'] ) ? $field_values['images'] : '';
 		unset( $field_values['images'] );
 
+		// Extract URLs for other file attributes (uploaded after save, like images).
+		$file_urls = [];
+		foreach ( $field_values as $field_key => $val ) {
+			$field_obj = isset( $mappable_fields[ $field_key ]['field_obj'] ) ? $mappable_fields[ $field_key ]['field_obj'] : null;
+
+			if ( $field_obj && 'attachment_upload' === $field_obj::get_meta( 'name' ) ) {
+				$file_urls[ $field_key ] = array_filter( array_map( 'trim', explode( ',', (string) $val ) ) );
+				unset( $field_values[ $field_key ] );
+			}
+		}
+
 		unset( $field_values['id'] );
 
 		// HivePress enforces a required description; fall back to title for new listings.
@@ -499,6 +572,48 @@ class Importer {
 
 				// Flush HivePress attachment cache for this listing.
 				hivepress()->cache->delete_post_cache( $listing->get_id(), 'image_ids', 'models/attachment' );
+			}
+		}
+
+		// Upload files for other attachment attributes, as HivePress Import does:
+		// multiple fields get all uploaded files, single ones the first valid file.
+		$file_values = [];
+		foreach ( $file_urls as $field_key => $urls ) {
+			$field_obj = $mappable_fields[ $field_key ]['field_obj'];
+			$file_ids  = [];
+
+			foreach ( $urls as $file_url ) {
+				$att_id = Image_Handler::sideload_file( $file_url, $listing->get_id(), $field_key, (array) $field_obj->get_formats() );
+
+				if ( is_wp_error( $att_id ) ) {
+					$listing_errors[] = sprintf(
+						/* translators: 1: file URL, 2: field label, 3: error message. */
+						__( 'Error uploading "%1$s" file for "%2$s": %3$s', 'pb-hivepress-import' ),
+						esc_url( $file_url ),
+						$field_obj->get_label(),
+						$att_id->get_error_message()
+					);
+
+					continue;
+				}
+
+				$file_ids[] = $att_id;
+
+				if ( ! $field_obj->is_multiple() ) {
+					break;
+				}
+			}
+
+			if ( $file_ids ) {
+				$file_values[ $field_key ] = $field_obj->is_multiple() ? $file_ids : $file_ids[0];
+			}
+		}
+
+		if ( $file_values ) {
+			$listing->fill( $file_values );
+
+			if ( ! $listing->save( array_keys( $file_values ) ) ) {
+				$listing_errors = array_merge( $listing_errors, $listing->_get_errors() );
 			}
 		}
 
