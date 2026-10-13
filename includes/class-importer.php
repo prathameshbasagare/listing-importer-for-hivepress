@@ -133,17 +133,17 @@ class Importer {
 		 *
 		 * @param string[] $names Attribute field names.
 		 */
-		$extra_names = (array) apply_filters( 'hp_pb_import_extra_fields', [ 'google_place_id', 'google_rating' ] );
+		// $extra_names = (array) apply_filters( 'hp_pb_import_extra_fields', [ 'google_place_id', 'google_rating' ] );
 
-		if ( $extra_names ) {
-			$model_fields = ( new Models\Listing() )->set_id( null )->_get_fields();
+		// if ( $extra_names ) {
+		// 	$model_fields = ( new Models\Listing() )->set_id( null )->_get_fields();
 
-			foreach ( $extra_names as $name ) {
-				if ( ! isset( $form_fields[ $name ] ) && isset( $model_fields[ $name ] ) && $model_fields[ $name ]->get_label() ) {
-					$form_fields[ $name ] = $model_fields[ $name ];
-				}
-			}
-		}
+		// 	foreach ( $extra_names as $name ) {
+		// 		if ( ! isset( $form_fields[ $name ] ) && isset( $model_fields[ $name ] ) && $model_fields[ $name ]->get_label() ) {
+		// 			$form_fields[ $name ] = $model_fields[ $name ];
+		// 		}
+		// 	}
+		// }
 
 		$fields = [];
 

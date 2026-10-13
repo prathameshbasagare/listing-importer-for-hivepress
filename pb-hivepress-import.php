@@ -3,7 +3,7 @@
  * Plugin Name: HivePress Import by PB
  * Plugin URI: https://github.com/
  * Description: High-performance admin importer for HivePress with smart MIME-type detection and auto-extension resolution for extensionless and CDN image URLs.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: PB
  * Text Domain: pb-hivepress-import
  * Requires at least: 5.8
