@@ -1,15 +1,61 @@
 # Listing Importer for HivePress
 
-A fast, admin-centric listings importer and exporter for **HivePress** with intelligent binary MIME-type inspection, image deduplication, and automatic file extension resolution for extensionless and CDN image URLs.
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![WordPress](https://img.shields.io/badge/WordPress-5.8%2B-blue.svg)](https://wordpress.org)
+[![PHP](https://img.shields.io/badge/PHP-7.4%2B-green.svg)](https://php.net)
 
-## Features
-- **Admin-Only Workflow**: Located in WordPress Admin at `Listings > Import Listings`.
-- **Smart Image Importer**:
-  - Automatically inspects the binary content (`image/jpeg`, `image/png`, `image/webp`, etc.) of extensionless and CDN URLs (e.g., Unsplash, Google Street View, AWS S3).
-  - Automatically resolves and appends the correct extension.
-  - Sideloads into the WordPress Media Library and links the primary image as the Featured Image and secondary images to the HivePress Gallery.
-- **Outscraper & Complex CSV Compatibility**:
-  - Automatically parses dot-notated/nested fields (e.g., `company_insights.founded_year` $\to$ `Company Insights → Founded Year`).
-  - Auto-matches columns intelligently.
-  - Fallback logic for mandatory HivePress description requirement.
-- **Export Utility**: Export listings back to CSV filtered by category with custom delimiters.
+**Listing Importer for HivePress** is a fast, reliable, admin-centric listings importer and exporter built specifically for [HivePress](https://hivepress.io). It allows you to import hundreds or thousands of listings from spreadsheets (CSV/TXT) without server timeouts, broken image URLs, or duplicate media clutter.
+
+---
+
+## 🌟 Why Use This Plugin?
+
+If you run a directory, classifieds, or marketplace site on HivePress, adding listings manually one-by-one is impossible at scale. However, traditional WordPress importers often crash on large files or choke on modern image URLs.
+
+This plugin was engineered from the ground up to solve the most common pain points:
+
+| Common Problem in Other Importers | How Listing Importer for HivePress Solves It |
+| :--- | :--- |
+| **Server 504 Timeouts & White Screens** | **Asynchronous AJAX Batching**: Imports rows in small chunks in the background with a real-time progress bar. |
+| **Interrupted Imports Require Starting Over** | **Crash/Resume Recovery**: Saves its byte offset after every row. A single click on *"Retry / Resume"* continues right where it stopped. |
+| **Broken Images from CDNs & Scrapers** | **Smart Binary MIME Detection**: Reads binary file headers of dynamic/extensionless URLs (Unsplash, Google Places, AWS S3) and auto-resolves `.jpg`, `.png`, `.webp`, `.avif`. |
+| **Media Library Bloat & Duplicates** | **Cryptographic Deduplication**: Re-uses existing media attachments based on source URL hashes instead of downloading duplicate files. |
+| **Messy CSV Headers from Scraper Tools** | **Auto-Label Conversion & Matching**: Automatically transforms dot-notated columns like `company_insights.founded_year` into readable labels and pre-matches them. |
+| **Need to Edit & Re-Import Data** | **Built-in CSV Exporter**: Exports listings with categories, custom attributes, and image URLs formatted with Excel UTF-8 BOM encoding. |
+
+---
+
+## 🚀 Key Features
+
+* **3-Step Visual Admin Wizard**: Accessible under `wp-admin > Listings > Import Listings`.
+* **Flexible Modes**:
+  * **Create New Listings**: Add new listings without modifying existing ones.
+  * **Update Existing Listings**: Match by ID column to update records in bulk.
+  * **Append / Upsert**: Update existing listings if ID exists; otherwise create new.
+* **Full Custom Attribute Support**: Automatically loads every custom attribute defined in `Listings > Attributes` (text, dropdowns, checkboxes, dates, URLs, numbers).
+* **Multi-Image Galleries**: Supports comma-separated image URLs in a single column. The first is set as Featured Thumbnail, and remaining images attach to the HivePress Gallery.
+* **Category Auto-Assignment or Row Mapping**: Assign a single blanket category or map a CSV column containing category names, slugs, or IDs.
+* **Security Hardened**: Protected against CSRF, SSRF, directory traversal, and CSV Formula Injection (CWE-1236).
+
+---
+
+## 📖 How It Works in 3 Steps
+
+1. **Step 1: Upload Your File**: Select your CSV or TXT file, set your delimiter (usually `,`), and pick your import mode.
+2. **Step 2: Map Your Columns**: Review the auto-detected columns and map any remaining custom fields via intuitive dropdowns.
+3. **Step 3: Watch It Run**: The real-time progress bar tracks created, updated, and failed rows. Detailed error logs tell you exactly which rows had issues and why.
+
+---
+
+## 🛠 Installation
+
+1. Download or clone this repository into `/wp-content/plugins/listing-importer-for-hivepress`.
+2. Activate the plugin in **WordPress Admin > Plugins**.
+3. Ensure the core **HivePress** plugin is active.
+4. Navigate to **Listings > Import Listings** to start importing.
+
+---
+
+## 📄 License
+
+This plugin is free software, licensed under the [GNU General Public License v3 or later (GPLv3+)](https://www.gnu.org/licenses/gpl-3.0.html).
