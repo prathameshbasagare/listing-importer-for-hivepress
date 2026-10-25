@@ -2,10 +2,11 @@
 /**
  * Image Downloader & Sideload Handler.
  *
- * @package HivePress_Import_PB
+ * @package Listing_Importer_For_HivePress
+ * @license GPL-3.0-or-later
  */
 
-namespace HivePress_Import_PB;
+namespace Listing_Importer_For_HivePress;
 
 // Exit if accessed directly.
 defined( 'ABSPATH' ) || exit;
@@ -49,10 +50,10 @@ class Image_Handler {
 	 * @return int|\WP_Error Attachment ID on success, or WP_Error on failure.
 	 */
 	public static function sideload_image( $url, $post_parent = 0, $parent_field = 'images' ) {
-		$url = trim( $url );
+		$url = esc_url_raw( trim( $url ) );
 
-		if ( empty( $url ) || ! filter_var( $url, FILTER_VALIDATE_URL ) ) {
-			return new \WP_Error( 'invalid_url', __( 'Invalid image URL provided.', 'pb-hivepress-import' ) );
+		if ( empty( $url ) || ! wp_http_validate_url( $url ) ) {
+			return new \WP_Error( 'invalid_url', esc_html__( 'Invalid or prohibited image URL provided.', 'listing-importer-for-hivepress' ) );
 		}
 
 		// Image deduplication: reuse an attachment previously imported from this URL.
@@ -105,7 +106,7 @@ class Image_Handler {
 				'unsupported_mime',
 				sprintf(
 					/* translators: 1: detected mime type, 2: url */
-					__( 'Unsupported image type "%1$s" for URL: %2$s', 'pb-hivepress-import' ),
+					__( 'Unsupported image type "%1$s" for URL: %2$s', 'listing-importer-for-hivepress' ),
 					$mime_type ? $mime_type : 'unknown',
 					$url
 				)
@@ -160,12 +161,12 @@ class Image_Handler {
 	public static function sideload_file( $url, $post_parent, $parent_field, $formats = [] ) {
 		$url = esc_url_raw( trim( $url ) );
 
-		if ( empty( $url ) || ! filter_var( $url, FILTER_VALIDATE_URL ) ) {
-			return new \WP_Error( 'invalid_url', __( 'Invalid file URL provided.', 'pb-hivepress-import' ) );
+		if ( empty( $url ) || ! wp_http_validate_url( $url ) ) {
+			return new \WP_Error( 'invalid_url', esc_html__( 'Invalid or prohibited file URL provided.', 'listing-importer-for-hivepress' ) );
 		}
 
 		/* translators: %s: file extensions. */
-		$format_error = sprintf( __( 'Only %s files are allowed.', 'pb-hivepress-import' ), strtoupper( implode( ', ', (array) $formats ) ) );
+		$format_error = sprintf( __( 'Only %s files are allowed.', 'listing-importer-for-hivepress' ), strtoupper( implode( ', ', (array) $formats ) ) );
 
 		// Reuse an attachment previously imported from this URL, if it suits this field.
 		$existing_id = self::find_reusable_attachment( md5( $url ), $post_parent );
@@ -207,7 +208,7 @@ class Image_Handler {
 
 		if ( ! $filename ) {
 			@unlink( $tmp_file );
-			return new \WP_Error( 'invalid_name', __( 'Invalid file name.', 'pb-hivepress-import' ) );
+			return new \WP_Error( 'invalid_name', __( 'Invalid file name.', 'listing-importer-for-hivepress' ) );
 		}
 
 		if ( $formats && ! hivepress()->attachment->is_valid_file( $tmp_file, $filename, $formats ) ) {

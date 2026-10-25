@@ -2,10 +2,11 @@
 /**
  * Importer Engine.
  *
- * @package HivePress_Import_PB
+ * @package Listing_Importer_For_HivePress
+ * @license GPL-3.0-or-later
  */
 
-namespace HivePress_Import_PB;
+namespace Listing_Importer_For_HivePress;
 
 use HivePress\Models;
 use HivePress\Helpers as hp;
@@ -68,8 +69,8 @@ class Importer {
 
 			// Add ID field.
 			$import_fields['id'] = [
-				'label'       => __( 'ID', 'pb-hivepress-import' ),
-				'description' => __( 'Select the ID column for updating existing listings.', 'pb-hivepress-import' ),
+				'label'       => __( 'ID', 'listing-importer-for-hivepress' ),
+				'description' => __( 'Select the ID column for updating existing listings.', 'listing-importer-for-hivepress' ),
 				'type'        => 'id',
 				'required'    => true,
 				'_order'      => 1,
@@ -106,7 +107,7 @@ class Importer {
 
 					'user'     => [
 						'label'       => hivepress()->translator->get_string( 'user' ),
-						'description' => __( 'Accepts usernames or email addresses.', 'pb-hivepress-import' ),
+						'description' => __( 'Accepts usernames or email addresses.', 'listing-importer-for-hivepress' ),
 						'required'    => false,
 						'_order'      => 2,
 					],
@@ -175,7 +176,7 @@ class Importer {
 		if ( 'categories' === $field->get_name() ) {
 
 			// Categories are resolved by name, slug or ID rather than by option label.
-			return __( 'Accepts category names, slugs or IDs (comma-separated).', 'pb-hivepress-import' );
+			return __( 'Accepts category names, slugs or IDs (comma-separated).', 'listing-importer-for-hivepress' );
 		}
 
 		if ( is_array( $field->get_arg( 'options' ) ) ) {
@@ -187,13 +188,13 @@ class Importer {
 			);
 
 			/* translators: %s: option labels. */
-			return sprintf( __( 'Accepts any of these values: %s.', 'pb-hivepress-import' ), implode( ', ', $field_labels ) );
+			return sprintf( __( 'Accepts any of these values: %s.', 'listing-importer-for-hivepress' ), implode( ', ', $field_labels ) );
 		}
 
 		switch ( $field_type ) {
 			case 'attachment_upload':
 				/* translators: %s: file formats. */
-				return sprintf( __( 'Accepts URLs of these file formats: %s.', 'pb-hivepress-import' ), strtoupper( implode( ', ', $field->get_formats() ) ) );
+				return sprintf( __( 'Accepts URLs of these file formats: %s.', 'listing-importer-for-hivepress' ), strtoupper( implode( ', ', $field->get_formats() ) ) );
 
 			case 'date':
 				$field_format = 'Y-m-d';
@@ -205,20 +206,20 @@ class Importer {
 				}
 
 				/* translators: %s: date format. */
-				return sprintf( __( 'Accepts dates in "%s" format.', 'pb-hivepress-import' ), $field_format );
+				return sprintf( __( 'Accepts dates in "%s" format.', 'listing-importer-for-hivepress' ), $field_format );
 
 			case 'embed':
-				return __( 'Accepts the embed URLs.', 'pb-hivepress-import' );
+				return __( 'Accepts the embed URLs.', 'listing-importer-for-hivepress' );
 
 			case 'checkbox':
 				/* translators: %s: allowed value. */
-				return sprintf( __( 'Accepts "%s" or empty values.', 'pb-hivepress-import' ), 1 );
+				return sprintf( __( 'Accepts "%s" or empty values.', 'listing-importer-for-hivepress' ), 1 );
 
 			case 'time':
-				return __( 'Accepts times in seconds.', 'pb-hivepress-import' );
+				return __( 'Accepts times in seconds.', 'listing-importer-for-hivepress' );
 
 			case 'url':
-				return __( 'Accepts URLs.', 'pb-hivepress-import' );
+				return __( 'Accepts URLs.', 'listing-importer-for-hivepress' );
 		}
 
 		return '';
@@ -397,7 +398,7 @@ class Importer {
 		if ( empty( $field_values['title'] ) ) {
 			return [
 				'result' => 'failed',
-				'errors' => [ __( 'Missing Title.', 'pb-hivepress-import' ) ],
+				'errors' => [ __( 'Missing Title.', 'listing-importer-for-hivepress' ) ],
 			];
 		}
 
@@ -439,7 +440,7 @@ class Importer {
 				'result' => 'failed',
 				'errors' => [ sprintf(
 					/* translators: %d: listing ID */
-					__( 'Listing ID %d not found for update.', 'pb-hivepress-import' ),
+					__( 'Listing ID %d not found for update.', 'listing-importer-for-hivepress' ),
 					$listing_id
 				) ],
 			];
@@ -504,7 +505,7 @@ class Importer {
 		if ( $is_new && empty( $field_values['description'] ) ) {
 			$field_values['description'] = ! empty( $field_values['title'] )
 				? sanitize_text_field( $field_values['title'] )
-				: __( 'No description provided.', 'pb-hivepress-import' );
+				: __( 'No description provided.', 'listing-importer-for-hivepress' );
 		}
 
 		// Normalize boolean flags.
@@ -534,7 +535,7 @@ class Importer {
 			$errs = $listing->_get_errors();
 			return [
 				'result' => 'failed',
-				'errors' => [ ! empty( $errs ) ? implode( '; ', $errs ) : __( 'Failed to save listing record.', 'pb-hivepress-import' ) ],
+				'errors' => [ ! empty( $errs ) ? implode( '; ', $errs ) : __( 'Failed to save listing record.', 'listing-importer-for-hivepress' ) ],
 			];
 		}
 
@@ -549,7 +550,7 @@ class Importer {
 				if ( is_wp_error( $att_id ) ) {
 					$listing_errors[] = sprintf(
 						/* translators: 1: url, 2: error message */
-						__( 'Image error for "%1$s": %2$s', 'pb-hivepress-import' ),
+						__( 'Image error for "%1$s": %2$s', 'listing-importer-for-hivepress' ),
 						esc_url( $img_url ),
 						$att_id->get_error_message()
 					);
@@ -588,7 +589,7 @@ class Importer {
 				if ( is_wp_error( $att_id ) ) {
 					$listing_errors[] = sprintf(
 						/* translators: 1: file URL, 2: field label, 3: error message. */
-						__( 'Error uploading "%1$s" file for "%2$s": %3$s', 'pb-hivepress-import' ),
+						__( 'Error uploading "%1$s" file for "%2$s": %3$s', 'listing-importer-for-hivepress' ),
 						esc_url( $file_url ),
 						$field_obj->get_label(),
 						$att_id->get_error_message()
@@ -668,13 +669,13 @@ class Importer {
 		];
 
 		if ( ! file_exists( $file_path ) || ! is_readable( $file_path ) ) {
-			$result['message'] = __( 'CSV file could not be found or read.', 'pb-hivepress-import' );
+			$result['message'] = __( 'CSV file could not be found or read.', 'listing-importer-for-hivepress' );
 			return $result;
 		}
 
 		$file = fopen( $file_path, 'r' );
 		if ( ! $file ) {
-			$result['message'] = __( 'Failed to open CSV file stream.', 'pb-hivepress-import' );
+			$result['message'] = __( 'Failed to open CSV file stream.', 'listing-importer-for-hivepress' );
 			return $result;
 		}
 
@@ -682,7 +683,7 @@ class Importer {
 			fseek( $file, $offset );
 		} elseif ( ! fgetcsv( $file, 0, $delimiter, '"', '\\' ) ) {
 			fclose( $file );
-			$result['message'] = __( 'CSV file header is empty or invalid.', 'pb-hivepress-import' );
+			$result['message'] = __( 'CSV file header is empty or invalid.', 'listing-importer-for-hivepress' );
 			return $result;
 		}
 
@@ -719,7 +720,7 @@ class Importer {
 				$skip_first = false;
 				$row_result = [
 					'result' => 'failed',
-					'errors' => [ __( 'Skipped: the server stopped while importing this row (timeout or fatal error).', 'pb-hivepress-import' ) ],
+					'errors' => [ __( 'Skipped: the server stopped while importing this row (timeout or fatal error).', 'listing-importer-for-hivepress' ) ],
 				];
 			} elseif ( empty( array_filter( $row ) ) ) {
 				// Skip completely empty lines

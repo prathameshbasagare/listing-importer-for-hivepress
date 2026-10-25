@@ -2,10 +2,10 @@
 /**
  * Admin Interface & Wizard Page.
  *
- * @package HivePress_Import_PB
+ * @package Listing_Importer_For_HivePress
  */
 
-namespace HivePress_Import_PB;
+namespace Listing_Importer_For_HivePress;
 
 // Exit if accessed directly.
 defined( 'ABSPATH' ) || exit;
@@ -20,7 +20,7 @@ class Admin_Page {
 	/**
 	 * Page slug.
 	 */
-	const PAGE_SLUG = 'pb-hivepress-import';
+	const PAGE_SLUG = 'listing-importer-for-hivepress';
 
 	/**
 	 * Init hooks.
@@ -30,6 +30,8 @@ class Admin_Page {
 		add_action( 'admin_init', [ __CLASS__, 'handle_export_request' ] );
 		add_action( 'admin_init', [ __CLASS__, 'handle_step_actions' ] );
 		add_action( 'admin_enqueue_scripts', [ __CLASS__, 'enqueue_admin_assets' ] );
+		add_action( 'wp_ajax_listing_importer_start', [ __CLASS__, 'ajax_import_start' ] );
+		add_action( 'wp_ajax_listing_importer_chunk', [ __CLASS__, 'ajax_import_chunk' ] );
 		add_action( 'wp_ajax_hp_pb_import_start', [ __CLASS__, 'ajax_import_start' ] );
 		add_action( 'wp_ajax_hp_pb_import_chunk', [ __CLASS__, 'ajax_import_chunk' ] );
 	}
@@ -40,8 +42,8 @@ class Admin_Page {
 	public static function register_admin_menu() {
 		add_submenu_page(
 			'edit.php?post_type=hp_listing',
-			__( 'Import & Export Listings', 'pb-hivepress-import' ),
-			__( 'Import Listings', 'pb-hivepress-import' ),
+			__( 'Import & Export Listings', 'listing-importer-for-hivepress' ),
+			__( 'Import Listings', 'listing-importer-for-hivepress' ),
 			'manage_options',
 			self::PAGE_SLUG,
 			[ __CLASS__, 'render_page' ]
@@ -79,27 +81,27 @@ class Admin_Page {
 		}
 
 		wp_enqueue_script(
-			'pb-hivepress-import-progress',
+			'listing-importer-for-hivepress-progress',
 			plugins_url( 'assets/js/import-progress.js', dirname( __FILE__ ) ),
 			[],
-			'1.1.0',
+			'1.0.1',
 			true
 		);
 
-		wp_localize_script( 'pb-hivepress-import-progress', 'hpPbImport', [
+		wp_localize_script( 'listing-importer-for-hivepress-progress', 'listingImporterForHivePress', [
 			'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 			'i18n'    => [
 				/* translators: Placeholders are kept literal: {processed}, {total}, {percent}. */
-				'progress'    => __( 'Processing row {processed} of {total} ({percent}%)…', 'pb-hivepress-import' ),
-				'preparing'   => __( 'Preparing import…', 'pb-hivepress-import' ),
-				'resuming'    => __( 'Resuming import…', 'pb-hivepress-import' ),
-				'done'        => __( 'Import complete. Loading summary…', 'pb-hivepress-import' ),
-				'failed'      => __( 'Import paused:', 'pb-hivepress-import' ),
+				'progress'    => __( 'Processing row {processed} of {total} ({percent}%)…', 'listing-importer-for-hivepress' ),
+				'preparing'   => __( 'Preparing import…', 'listing-importer-for-hivepress' ),
+				'resuming'    => __( 'Resuming import…', 'listing-importer-for-hivepress' ),
+				'done'        => __( 'Import complete. Loading summary…', 'listing-importer-for-hivepress' ),
+				'failed'      => __( 'Import paused:', 'listing-importer-for-hivepress' ),
 				/* translators: {status} is the HTTP status code. */
-				'badResponse' => __( 'Unexpected server response (HTTP {status}). Check the PHP error log.', 'pb-hivepress-import' ),
-				'unknown'     => __( 'Unknown error.', 'pb-hivepress-import' ),
+				'badResponse' => __( 'Unexpected server response (HTTP {status}). Check the PHP error log.', 'listing-importer-for-hivepress' ),
+				'unknown'     => __( 'Unknown error.', 'listing-importer-for-hivepress' ),
 				/* translators: {row} is the CSV row number. */
-				'rowLabel'    => __( 'Row #{row}:', 'pb-hivepress-import' ),
+				'rowLabel'    => __( 'Row #{row}:', 'listing-importer-for-hivepress' ),
 			],
 		] );
 	}
@@ -112,13 +114,14 @@ class Admin_Page {
 	 * @return array
 	 */
 	protected static function verify_ajax_request() {
-		if ( ! check_ajax_referer( 'hp_pb_process_action', 'nonce', false ) || ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( [ 'message' => __( 'Your session has expired. Please reload the page.', 'pb-hivepress-import' ) ], 403 );
+		$nonce_valid = check_ajax_referer( 'listing_importer_process_action', 'nonce', false ) || check_ajax_referer( 'hp_pb_process_action', 'nonce', false );
+		if ( ! $nonce_valid || ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( [ 'message' => esc_html__( 'Your session has expired or you do not have sufficient permissions. Please reload the page.', 'listing-importer-for-hivepress' ) ], 403 );
 		}
 
 		$session = get_transient( 'hp_import_session_' . get_current_user_id() );
 		if ( ! $session || ! file_exists( $session['file_path'] ) ) {
-			wp_send_json_error( [ 'message' => __( 'Upload session expired. Please upload your CSV again.', 'pb-hivepress-import' ) ] );
+			wp_send_json_error( [ 'message' => esc_html__( 'Upload session expired. Please upload your CSV again.', 'listing-importer-for-hivepress' ) ] );
 		}
 
 		return $session;
@@ -148,7 +151,7 @@ class Admin_Page {
 	 */
 	protected static function get_missing_fields_message( $labels ) {
 		/* translators: %s: field labels. */
-		return sprintf( __( 'Please select a CSV column for these required fields: %s.', 'pb-hivepress-import' ), implode( ', ', $labels ) );
+		return sprintf( __( 'Please select a CSV column for these required fields: %s.', 'listing-importer-for-hivepress' ), implode( ', ', $labels ) );
 	}
 
 	/**
@@ -188,7 +191,7 @@ class Admin_Page {
 		$session = self::verify_ajax_request();
 
 		if ( ! isset( $session['mappings'] ) ) {
-			wp_send_json_error( [ 'message' => __( 'Import has not been started.', 'pb-hivepress-import' ) ] );
+			wp_send_json_error( [ 'message' => __( 'Import has not been started.', 'listing-importer-for-hivepress' ) ] );
 		}
 
 		$session_key = 'hp_import_session_' . get_current_user_id();
@@ -205,7 +208,7 @@ class Admin_Page {
 			'mappings'    => $session['mappings'],
 			'offset'      => $offset,
 			'row_index'   => $session['row_index'],
-			'chunk_size'  => (int) apply_filters( 'hp_pb_import_chunk_size', 5 ),
+			'chunk_size'  => (int) apply_filters( 'listing_importer_for_hivepress_chunk_size', apply_filters( 'hp_pb_import_chunk_size', 5 ) ),
 			'skip_first'  => $skip_first,
 			'on_progress' => function( $event ) use ( &$session, $session_key ) {
 				if ( 'start' === $event['type'] ) {
@@ -267,10 +270,17 @@ class Admin_Page {
 	 * Handle CSV Export direct downloads.
 	 */
 	public static function handle_export_request() {
-		if ( ! empty( $_POST['hp_pb_export_nonce'] ) && wp_verify_nonce( sanitize_key( $_POST['hp_pb_export_nonce'] ), 'hp_pb_export_action' ) ) {
+		$export_nonce = ! empty( $_POST['listing_importer_export_nonce'] ) ? sanitize_key( $_POST['listing_importer_export_nonce'] ) : ( ! empty( $_POST['hp_pb_export_nonce'] ) ? sanitize_key( $_POST['hp_pb_export_nonce'] ) : '' );
+		$is_valid     = $export_nonce && ( wp_verify_nonce( $export_nonce, 'listing_importer_export_action' ) || wp_verify_nonce( $export_nonce, 'hp_pb_export_action' ) );
+
+		if ( $is_valid ) {
+			if ( ! current_user_can( 'manage_options' ) ) {
+				wp_die( esc_html__( 'Unauthorized user.', 'listing-importer-for-hivepress' ) );
+			}
+
 			Exporter::export( [
 				'category_id' => ! empty( $_POST['category_id'] ) ? absint( $_POST['category_id'] ) : 0,
-				'delimiter'   => ! empty( $_POST['delimiter'] ) ? sanitize_text_field( $_POST['delimiter'] ) : ',',
+				'delimiter'   => ! empty( $_POST['delimiter'] ) ? sanitize_text_field( wp_unslash( $_POST['delimiter'] ) ) : ',',
 			] );
 		}
 	}
@@ -285,9 +295,23 @@ class Admin_Page {
 		}
 
 		// Action 1: Upload file (Step 1 -> Step 2)
-		if ( ! empty( $_POST['hp_pb_upload_nonce'] ) && wp_verify_nonce( sanitize_key( $_POST['hp_pb_upload_nonce'] ), 'hp_pb_upload_action' ) ) {
-			if ( empty( $_FILES['csv_file']['tmp_name'] ) ) {
-				add_settings_error( 'hp_import', 'no_file', __( 'Please choose a CSV file to upload.', 'pb-hivepress-import' ) );
+		$upload_nonce    = ! empty( $_POST['listing_importer_upload_nonce'] ) ? sanitize_key( $_POST['listing_importer_upload_nonce'] ) : ( ! empty( $_POST['hp_pb_upload_nonce'] ) ? sanitize_key( $_POST['hp_pb_upload_nonce'] ) : '' );
+		$is_upload_valid = $upload_nonce && ( wp_verify_nonce( $upload_nonce, 'listing_importer_upload_action' ) || wp_verify_nonce( $upload_nonce, 'hp_pb_upload_action' ) );
+
+		if ( $is_upload_valid ) {
+			if ( ! current_user_can( 'manage_options' ) ) {
+				wp_die( esc_html__( 'Unauthorized user.', 'listing-importer-for-hivepress' ) );
+			}
+
+			if ( empty( $_FILES['csv_file']['tmp_name'] ) || empty( $_FILES['csv_file']['name'] ) ) {
+				add_settings_error( 'hp_import', 'no_file', esc_html__( 'Please choose a CSV file to upload.', 'listing-importer-for-hivepress' ) );
+				return;
+			}
+
+			$orig_filename = sanitize_file_name( wp_unslash( $_FILES['csv_file']['name'] ) );
+			$file_ext      = strtolower( pathinfo( $orig_filename, PATHINFO_EXTENSION ) );
+			if ( ! in_array( $file_ext, [ 'csv', 'txt' ], true ) ) {
+				add_settings_error( 'hp_import', 'invalid_extension', esc_html__( 'Only CSV and TXT files are allowed.', 'listing-importer-for-hivepress' ) );
 				return;
 			}
 
@@ -297,17 +321,27 @@ class Admin_Page {
 			if ( ! file_exists( $target_dir ) ) {
 				wp_mkdir_p( $target_dir );
 			}
+			// Protect directory from direct listing / web execution
+			if ( ! file_exists( $target_dir . '/index.html' ) ) {
+				file_put_contents( $target_dir . '/index.html', '' );
+			}
+			if ( ! file_exists( $target_dir . '/.htaccess' ) ) {
+				file_put_contents( $target_dir . '/.htaccess', 'Deny from all' );
+			}
 
-			$filename = 'import-' . wp_generate_password( 10, false, false ) . '.csv';
+			$filename    = 'import-' . wp_generate_password( 12, false, false ) . '.csv';
 			$target_path = $target_dir . '/' . $filename;
 
 			if ( ! move_uploaded_file( $_FILES['csv_file']['tmp_name'], $target_path ) ) {
-				add_settings_error( 'hp_import', 'upload_failed', __( 'Could not save uploaded CSV file.', 'pb-hivepress-import' ) );
+				add_settings_error( 'hp_import', 'upload_failed', esc_html__( 'Could not save uploaded CSV file.', 'listing-importer-for-hivepress' ) );
 				return;
 			}
 
-			$delimiter   = ! empty( $_POST['delimiter'] ) ? sanitize_text_field( $_POST['delimiter'] ) : ',';
-			$mode        = ! empty( $_POST['mode'] ) ? sanitize_text_field( $_POST['mode'] ) : 'create';
+			$delimiter   = ! empty( $_POST['delimiter'] ) ? sanitize_text_field( wp_unslash( $_POST['delimiter'] ) ) : ',';
+			$mode        = ! empty( $_POST['mode'] ) ? sanitize_key( wp_unslash( $_POST['mode'] ) ) : 'create';
+			if ( ! in_array( $mode, [ 'create', 'update', 'append' ], true ) ) {
+				$mode = 'create';
+			}
 			$category_id = ! empty( $_POST['category_id'] ) ? absint( $_POST['category_id'] ) : 0;
 
 			// Store in transient for current admin
@@ -324,7 +358,14 @@ class Admin_Page {
 		}
 
 		// Action 2: Process Mapped Data (Step 2 -> Step 3)
-		if ( ! empty( $_POST['hp_pb_process_nonce'] ) && wp_verify_nonce( sanitize_key( $_POST['hp_pb_process_nonce'] ), 'hp_pb_process_action' ) ) {
+		$process_nonce    = ! empty( $_POST['listing_importer_process_nonce'] ) ? sanitize_key( $_POST['listing_importer_process_nonce'] ) : ( ! empty( $_POST['hp_pb_process_nonce'] ) ? sanitize_key( $_POST['hp_pb_process_nonce'] ) : '' );
+		$is_process_valid = $process_nonce && ( wp_verify_nonce( $process_nonce, 'listing_importer_process_action' ) || wp_verify_nonce( $process_nonce, 'hp_pb_process_action' ) );
+
+		if ( $is_process_valid ) {
+			if ( ! current_user_can( 'manage_options' ) ) {
+				wp_die( esc_html__( 'Unauthorized user.', 'listing-importer-for-hivepress' ) );
+			}
+
 			$session = get_transient( 'hp_import_session_' . get_current_user_id() );
 			if ( ! $session || ! file_exists( $session['file_path'] ) ) {
 				wp_safe_redirect( admin_url( 'edit.php?post_type=hp_listing&page=' . self::PAGE_SLUG . '&step=1' ) );
@@ -372,17 +413,17 @@ class Admin_Page {
 
 		?>
 		<div class="wrap hp-import-wrap">
-			<h1><?php esc_html_e( 'HivePress Listings Import & Export', 'pb-hivepress-import' ); ?></h1>
+			<h1><?php esc_html_e( 'Listings Import & Export for HivePress', 'listing-importer-for-hivepress' ); ?></h1>
 			<p class="description">
-				<?php esc_html_e( 'Import listings into HivePress with intelligent MIME-type detection for extensionless and CDN image URLs.', 'pb-hivepress-import' ); ?>
+				<?php esc_html_e( 'Import listings into HivePress with intelligent MIME-type detection for extensionless and CDN image URLs.', 'listing-importer-for-hivepress' ); ?>
 			</p>
 
 			<nav class="nav-tab-wrapper wp-clearfix">
 				<a href="<?php echo esc_url( admin_url( 'edit.php?post_type=hp_listing&page=' . self::PAGE_SLUG . '&tab=import' ) ); ?>" class="nav-tab <?php echo 'import' === $tab ? 'nav-tab-active' : ''; ?>">
-					<?php esc_html_e( 'Import Listings', 'pb-hivepress-import' ); ?>
+					<?php esc_html_e( 'Import Listings', 'listing-importer-for-hivepress' ); ?>
 				</a>
 				<a href="<?php echo esc_url( admin_url( 'edit.php?post_type=hp_listing&page=' . self::PAGE_SLUG . '&tab=export' ) ); ?>" class="nav-tab <?php echo 'export' === $tab ? 'nav-tab-active' : ''; ?>">
-					<?php esc_html_e( 'Export Listings', 'pb-hivepress-import' ); ?>
+					<?php esc_html_e( 'Export Listings', 'listing-importer-for-hivepress' ); ?>
 				</a>
 			</nav>
 
@@ -422,57 +463,57 @@ class Admin_Page {
 		] );
 		?>
 		<div class="hp-card">
-			<h2><span class="hp-step-badge"><?php esc_html_e( 'Step 1', 'pb-hivepress-import' ); ?></span> <?php esc_html_e( 'Upload CSV File', 'pb-hivepress-import' ); ?></h2>
+			<h2><span class="hp-step-badge"><?php esc_html_e( 'Step 1', 'listing-importer-for-hivepress' ); ?></span> <?php esc_html_e( 'Upload CSV File', 'listing-importer-for-hivepress' ); ?></h2>
 			<form method="post" enctype="multipart/form-data" action="">
-				<?php wp_nonce_field( 'hp_pb_upload_action', 'hp_pb_upload_nonce' ); ?>
+				<?php wp_nonce_field( 'listing_importer_upload_action', 'listing_importer_upload_nonce' ); ?>
 
 				<table class="form-table">
 					<tr>
-						<th scope="row"><label for="csv_file"><?php esc_html_e( 'CSV / TXT File', 'pb-hivepress-import' ); ?></label></th>
+						<th scope="row"><label for="csv_file"><?php esc_html_e( 'CSV / TXT File', 'listing-importer-for-hivepress' ); ?></label></th>
 						<td>
 							<input type="file" name="csv_file" id="csv_file" accept=".csv, .txt" required />
-							<p class="description"><?php esc_html_e( 'Select the CSV file containing your listings data.', 'pb-hivepress-import' ); ?></p>
+							<p class="description"><?php esc_html_e( 'Select the CSV file containing your listings data.', 'listing-importer-for-hivepress' ); ?></p>
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="delimiter"><?php esc_html_e( 'CSV Delimiter', 'pb-hivepress-import' ); ?></label></th>
+						<th scope="row"><label for="delimiter"><?php esc_html_e( 'CSV Delimiter', 'listing-importer-for-hivepress' ); ?></label></th>
 						<td>
 							<input type="text" name="delimiter" id="delimiter" value="," class="small-text" maxlength="1" required />
-							<p class="description"><?php esc_html_e( 'Typically a comma (,) or semicolon (;).', 'pb-hivepress-import' ); ?></p>
+							<p class="description"><?php esc_html_e( 'Typically a comma (,) or semicolon (;).', 'listing-importer-for-hivepress' ); ?></p>
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="mode"><?php esc_html_e( 'Import Mode', 'pb-hivepress-import' ); ?></label></th>
+						<th scope="row"><label for="mode"><?php esc_html_e( 'Import Mode', 'listing-importer-for-hivepress' ); ?></label></th>
 						<td>
 							<select name="mode" id="mode">
-								<option value="create"><?php esc_html_e( 'Create new listings only', 'pb-hivepress-import' ); ?></option>
-								<option value="update"><?php esc_html_e( 'Update existing listings only (requires ID column)', 'pb-hivepress-import' ); ?></option>
-								<option value="append"><?php esc_html_e( 'Update existing or create new', 'pb-hivepress-import' ); ?></option>
+								<option value="create"><?php esc_html_e( 'Create new listings only', 'listing-importer-for-hivepress' ); ?></option>
+								<option value="update"><?php esc_html_e( 'Update existing listings only (requires ID column)', 'listing-importer-for-hivepress' ); ?></option>
+								<option value="append"><?php esc_html_e( 'Update existing or create new', 'listing-importer-for-hivepress' ); ?></option>
 							</select>
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="category_id"><?php esc_html_e( 'Target Category', 'pb-hivepress-import' ); ?></label></th>
+						<th scope="row"><label for="category_id"><?php esc_html_e( 'Target Category', 'listing-importer-for-hivepress' ); ?></label></th>
 						<td>
 							<select name="category_id" id="category_id">
-								<option value=""><?php esc_html_e( '— None (Map categories per row in CSV) —', 'pb-hivepress-import' ); ?></option>
+								<option value=""><?php esc_html_e( '— None (Map categories per row in CSV) —', 'listing-importer-for-hivepress' ); ?></option>
 								<?php if ( ! empty( $categories ) && ! is_wp_error( $categories ) ) : ?>
 									<?php foreach ( $categories as $cat ) : ?>
 										<option value="<?php echo esc_attr( $cat->term_id ); ?>"><?php echo esc_html( $cat->name ); ?></option>
 									<?php endforeach; ?>
 								<?php endif; ?>
 							</select>
-							<p class="description"><?php esc_html_e( 'Optionally assign all imported listings to a single default category.', 'pb-hivepress-import' ); ?></p>
+							<p class="description"><?php esc_html_e( 'Optionally assign all imported listings to a single default category.', 'listing-importer-for-hivepress' ); ?></p>
 						</td>
 					</tr>
 				</table>
 
 				<div class="hp-notice-card">
-					<strong><?php esc_html_e( '💡 Smart Image Import Feature Active:', 'pb-hivepress-import' ); ?></strong>
-					<?php esc_html_e( 'Image URLs in CSV without file extensions (such as Unsplash, AWS S3, or modern CDN URLs) will be inspected on-the-fly and automatically assigned proper extensions (.jpg, .png, .webp).', 'pb-hivepress-import' ); ?>
+					<strong><?php esc_html_e( '💡 Smart Image Import Feature Active:', 'listing-importer-for-hivepress' ); ?></strong>
+					<?php esc_html_e( 'Image URLs in CSV without file extensions (such as Unsplash, AWS S3, or modern CDN URLs) will be inspected on-the-fly and automatically assigned proper extensions (.jpg, .png, .webp).', 'listing-importer-for-hivepress' ); ?>
 				</div>
 
-				<?php submit_button( __( 'Continue to Column Mapping →', 'pb-hivepress-import' ), 'primary' ); ?>
+				<?php submit_button( __( 'Continue to Column Mapping →', 'listing-importer-for-hivepress' ), 'primary' ); ?>
 			</form>
 		</div>
 		<?php
@@ -484,7 +525,7 @@ class Admin_Page {
 	protected static function render_step_2_mapping() {
 		$session = get_transient( 'hp_import_session_' . get_current_user_id() );
 		if ( ! $session || ! file_exists( $session['file_path'] ) ) {
-			echo '<div class="notice notice-error"><p>' . esc_html__( 'Upload session expired. Please upload your CSV again.', 'pb-hivepress-import' ) . '</p></div>';
+			echo '<div class="notice notice-error"><p>' . esc_html__( 'Upload session expired. Please upload your CSV again.', 'listing-importer-for-hivepress' ) . '</p></div>';
 			self::render_step_1_upload();
 			return;
 		}
@@ -494,17 +535,17 @@ class Admin_Page {
 		$posted  = ! empty( $_POST['mapping'] ) && is_array( $_POST['mapping'] ) ? array_map( 'sanitize_text_field', wp_unslash( $_POST['mapping'] ) ) : [];
 		?>
 		<div class="hp-card">
-			<h2><span class="hp-step-badge"><?php esc_html_e( 'Step 2', 'pb-hivepress-import' ); ?></span> <?php esc_html_e( 'Map Columns', 'pb-hivepress-import' ); ?></h2>
-			<p><?php esc_html_e( 'For each HivePress listing field below, choose which column from your CSV file contains the data.', 'pb-hivepress-import' ); ?></p>
+			<h2><span class="hp-step-badge"><?php esc_html_e( 'Step 2', 'listing-importer-for-hivepress' ); ?></span> <?php esc_html_e( 'Map Columns', 'listing-importer-for-hivepress' ); ?></h2>
+			<p><?php esc_html_e( 'For each HivePress listing field below, choose which column from your CSV file contains the data.', 'listing-importer-for-hivepress' ); ?></p>
 
-			<form method="post" action="" id="hp-pb-mapping-form">
-				<?php wp_nonce_field( 'hp_pb_process_action', 'hp_pb_process_nonce' ); ?>
+			<form method="post" action="" id="listing-importer-mapping-form">
+				<?php wp_nonce_field( 'listing_importer_process_action', 'listing_importer_process_nonce' ); ?>
 
 				<table class="hp-mapping-table">
 					<thead>
 						<tr>
-							<th style="width: 40%;"><?php esc_html_e( 'HivePress Field / Attribute', 'pb-hivepress-import' ); ?></th>
-							<th style="width: 60%;"><?php esc_html_e( 'CSV Column', 'pb-hivepress-import' ); ?></th>
+							<th style="width: 40%;"><?php esc_html_e( 'HivePress Field / Attribute', 'listing-importer-for-hivepress' ); ?></th>
+							<th style="width: 60%;"><?php esc_html_e( 'CSV Column', 'listing-importer-for-hivepress' ); ?></th>
 						</tr>
 					</thead>
 					<tbody>
@@ -517,7 +558,7 @@ class Admin_Page {
 								<td>
 									<strong><?php echo esc_html( $label ); ?></strong>
 									<?php if ( $is_req ) : ?>
-										<span style="color: #d63638;" title="<?php esc_attr_e( 'Required', 'pb-hivepress-import' ); ?>">*</span>
+										<span style="color: #d63638;" title="<?php esc_attr_e( 'Required', 'listing-importer-for-hivepress' ); ?>">*</span>
 									<?php endif; ?>
 									<?php if ( $desc ) : ?>
 										<div class="hp-field-desc"><?php echo esc_html( $desc ); ?></div>
@@ -525,7 +566,7 @@ class Admin_Page {
 								</td>
 								<td>
 									<select name="mapping[<?php echo esc_attr( $field_key ); ?>]" class="hp-col-select" <?php echo $is_req ? 'required' : ''; ?>>
-										<option value=""><?php esc_html_e( '— None (Do not import) —', 'pb-hivepress-import' ); ?></option>
+										<option value=""><?php esc_html_e( '— None (Do not import) —', 'listing-importer-for-hivepress' ); ?></option>
 										<?php
 										// Keep the submitted choice when the mapping is shown again after a validation error.
 										$posted_col   = isset( $posted[ $field_key ] ) ? (string) $posted[ $field_key ] : null;
@@ -580,28 +621,28 @@ class Admin_Page {
 				</table>
 
 				<div style="margin-top: 25px;">
-					<?php submit_button( __( 'Start Import Process Now 🚀', 'pb-hivepress-import' ), 'primary', 'submit', false ); ?>
+					<?php submit_button( __( 'Start Import Process Now 🚀', 'listing-importer-for-hivepress' ), 'primary', 'submit', false ); ?>
 					<a href="<?php echo esc_url( admin_url( 'edit.php?post_type=hp_listing&page=' . self::PAGE_SLUG . '&step=1' ) ); ?>" class="button button-secondary" style="margin-left: 10px;">
-						<?php esc_html_e( '← Back / Cancel', 'pb-hivepress-import' ); ?>
+						<?php esc_html_e( '← Back / Cancel', 'listing-importer-for-hivepress' ); ?>
 					</a>
 				</div>
 			</form>
 
-			<div id="hp-pb-progress" hidden>
+			<div id="listing-importer-progress" hidden>
 				<div class="hp-progress"><div class="hp-progress-bar"></div></div>
 				<p class="hp-progress-text"></p>
 				<p class="hp-progress-stats">
-					<strong style="color: #00a32a;"><?php esc_html_e( 'Created:', 'pb-hivepress-import' ); ?> <span data-stat="created">0</span></strong>
-					<strong style="color: #2271b1;"><?php esc_html_e( 'Updated:', 'pb-hivepress-import' ); ?> <span data-stat="updated">0</span></strong>
-					<strong style="color: #d63638;"><?php esc_html_e( 'Failed:', 'pb-hivepress-import' ); ?> <span data-stat="failed">0</span></strong>
+					<strong style="color: #00a32a;"><?php esc_html_e( 'Created:', 'listing-importer-for-hivepress' ); ?> <span data-stat="created">0</span></strong>
+					<strong style="color: #2271b1;"><?php esc_html_e( 'Updated:', 'listing-importer-for-hivepress' ); ?> <span data-stat="updated">0</span></strong>
+					<strong style="color: #d63638;"><?php esc_html_e( 'Failed:', 'listing-importer-for-hivepress' ); ?> <span data-stat="failed">0</span></strong>
 				</p>
-				<p class="description"><?php esc_html_e( 'Keep this page open until the import finishes.', 'pb-hivepress-import' ); ?></p>
+				<p class="description"><?php esc_html_e( 'Keep this page open until the import finishes.', 'listing-importer-for-hivepress' ); ?></p>
 				<div class="hp-error-box" hidden>
-					<h3 style="margin-top: 0; color: #d63638;"><?php esc_html_e( 'Import Warnings & Errors Log:', 'pb-hivepress-import' ); ?></h3>
+					<h3 style="margin-top: 0; color: #d63638;"><?php esc_html_e( 'Import Warnings & Errors Log:', 'listing-importer-for-hivepress' ); ?></h3>
 					<ul style="list-style: disc; margin-left: 20px;"></ul>
 				</div>
 				<p class="hp-progress-actions" hidden>
-					<button type="button" class="button button-primary" id="hp-pb-retry"><?php esc_html_e( 'Retry / Resume Import', 'pb-hivepress-import' ); ?></button>
+					<button type="button" class="button button-primary" id="listing-importer-retry"><?php esc_html_e( 'Retry / Resume Import', 'listing-importer-for-hivepress' ); ?></button>
 				</p>
 			</div>
 		</div>
@@ -618,8 +659,8 @@ class Admin_Page {
 		if ( empty( $result ) ) {
 			?>
 			<div class="hp-card">
-				<h2><?php esc_html_e( 'No recent import results found.', 'pb-hivepress-import' ); ?></h2>
-				<a href="<?php echo esc_url( admin_url( 'edit.php?post_type=hp_listing&page=' . self::PAGE_SLUG ) ); ?>" class="button button-primary"><?php esc_html_e( 'Start New Import', 'pb-hivepress-import' ); ?></a>
+				<h2><?php esc_html_e( 'No recent import results found.', 'listing-importer-for-hivepress' ); ?></h2>
+				<a href="<?php echo esc_url( admin_url( 'edit.php?post_type=hp_listing&page=' . self::PAGE_SLUG ) ); ?>" class="button button-primary"><?php esc_html_e( 'Start New Import', 'listing-importer-for-hivepress' ); ?></a>
 			</div>
 			<?php
 			return;
@@ -628,9 +669,9 @@ class Admin_Page {
 		if ( empty( $result['success'] ) ) {
 			?>
 			<div class="hp-card">
-				<h2><?php esc_html_e( 'Import Failed', 'pb-hivepress-import' ); ?></h2>
-				<p><?php echo esc_html( isset( $result['message'] ) ? $result['message'] : __( 'Unknown error.', 'pb-hivepress-import' ) ); ?></p>
-				<a href="<?php echo esc_url( admin_url( 'edit.php?post_type=hp_listing&page=' . self::PAGE_SLUG . '&step=2' ) ); ?>" class="button button-primary"><?php esc_html_e( '← Back to Mapping', 'pb-hivepress-import' ); ?></a>
+				<h2><?php esc_html_e( 'Import Failed', 'listing-importer-for-hivepress' ); ?></h2>
+				<p><?php echo esc_html( isset( $result['message'] ) ? $result['message'] : __( 'Unknown error.', 'listing-importer-for-hivepress' ) ); ?></p>
+				<a href="<?php echo esc_url( admin_url( 'edit.php?post_type=hp_listing&page=' . self::PAGE_SLUG . '&step=2' ) ); ?>" class="button button-primary"><?php esc_html_e( '← Back to Mapping', 'listing-importer-for-hivepress' ); ?></a>
 			</div>
 			<?php
 			return;
@@ -639,36 +680,36 @@ class Admin_Page {
 		$stats = isset( $result['stats'] ) ? $result['stats'] : [];
 		?>
 		<div class="hp-card">
-			<h2><span class="hp-step-badge" style="background: #00a32a;">✓</span> <?php esc_html_e( 'Import Process Completed', 'pb-hivepress-import' ); ?></h2>
+			<h2><span class="hp-step-badge" style="background: #00a32a;">✓</span> <?php esc_html_e( 'Import Process Completed', 'listing-importer-for-hivepress' ); ?></h2>
 
 			<table class="widefat" style="max-width: 600px; margin-top: 15px;">
 				<tbody>
 					<tr>
-						<td><strong><?php esc_html_e( 'Total CSV Rows Processed:', 'pb-hivepress-import' ); ?></strong></td>
-						<td><?php echo esc_html( $stats['total_rows'] ); ?></td>
+						<td><strong><?php esc_html_e( 'Total CSV Rows Processed:', 'listing-importer-for-hivepress' ); ?></strong></td>
+						<td><?php echo esc_html( isset( $stats['total_rows'] ) ? (string) $stats['total_rows'] : '0' ); ?></td>
 					</tr>
 					<tr>
-						<td><strong style="color: #00a32a;"><?php esc_html_e( 'New Listings Created:', 'pb-hivepress-import' ); ?></strong></td>
-						<td><strong><?php echo esc_html( $stats['created'] ); ?></strong></td>
+						<td><strong style="color: #00a32a;"><?php esc_html_e( 'New Listings Created:', 'listing-importer-for-hivepress' ); ?></strong></td>
+						<td><strong><?php echo esc_html( isset( $stats['created'] ) ? (string) $stats['created'] : '0' ); ?></strong></td>
 					</tr>
 					<tr>
-						<td><strong style="color: #2271b1;"><?php esc_html_e( 'Existing Listings Updated:', 'pb-hivepress-import' ); ?></strong></td>
-						<td><strong><?php echo esc_html( $stats['updated'] ); ?></strong></td>
+						<td><strong style="color: #2271b1;"><?php esc_html_e( 'Existing Listings Updated:', 'listing-importer-for-hivepress' ); ?></strong></td>
+						<td><strong><?php echo esc_html( isset( $stats['updated'] ) ? (string) $stats['updated'] : '0' ); ?></strong></td>
 					</tr>
 					<tr>
-						<td><strong style="color: #d63638;"><?php esc_html_e( 'Failed Rows:', 'pb-hivepress-import' ); ?></strong></td>
-						<td><?php echo esc_html( $stats['failed'] ); ?></td>
+						<td><strong style="color: #d63638;"><?php esc_html_e( 'Failed Rows:', 'listing-importer-for-hivepress' ); ?></strong></td>
+						<td><?php echo esc_html( isset( $stats['failed'] ) ? (string) $stats['failed'] : '0' ); ?></td>
 					</tr>
 				</tbody>
 			</table>
 
 			<?php if ( ! empty( $stats['errors'] ) ) : ?>
 				<div class="hp-error-box">
-					<h3 style="margin-top: 0; color: #d63638;"><?php esc_html_e( 'Import Warnings & Errors Log:', 'pb-hivepress-import' ); ?></h3>
+					<h3 style="margin-top: 0; color: #d63638;"><?php esc_html_e( 'Import Warnings & Errors Log:', 'listing-importer-for-hivepress' ); ?></h3>
 					<ul style="list-style: disc; margin-left: 20px;">
 						<?php foreach ( $stats['errors'] as $row_num => $row_errors ) : ?>
 							<li>
-								<strong><?php printf( esc_html__( 'Row #%d:', 'pb-hivepress-import' ), $row_num ); ?></strong>
+								<strong><?php printf( esc_html__( 'Row #%d:', 'listing-importer-for-hivepress' ), absint( $row_num ) ); ?></strong>
 								<?php echo esc_html( implode( ' | ', (array) $row_errors ) ); ?>
 							</li>
 						<?php endforeach; ?>
@@ -678,10 +719,10 @@ class Admin_Page {
 
 			<div style="margin-top: 25px;">
 				<a href="<?php echo esc_url( admin_url( 'edit.php?post_type=hp_listing' ) ); ?>" class="button button-primary">
-					<?php esc_html_e( 'View All Listings', 'pb-hivepress-import' ); ?>
+					<?php esc_html_e( 'View All Listings', 'listing-importer-for-hivepress' ); ?>
 				</a>
 				<a href="<?php echo esc_url( admin_url( 'edit.php?post_type=hp_listing&page=' . self::PAGE_SLUG . '&step=1' ) ); ?>" class="button button-secondary" style="margin-left: 10px;">
-					<?php esc_html_e( 'Import Another File', 'pb-hivepress-import' ); ?>
+					<?php esc_html_e( 'Import Another File', 'listing-importer-for-hivepress' ); ?>
 				</a>
 			</div>
 		</div>
@@ -698,18 +739,18 @@ class Admin_Page {
 		] );
 		?>
 		<div class="hp-card">
-			<h2><?php esc_html_e( 'Export Listings to CSV', 'pb-hivepress-import' ); ?></h2>
-			<p><?php esc_html_e( 'Download all listings, including titles, descriptions, categories, image URLs, and custom attributes.', 'pb-hivepress-import' ); ?></p>
+			<h2><?php esc_html_e( 'Export Listings to CSV', 'listing-importer-for-hivepress' ); ?></h2>
+			<p><?php esc_html_e( 'Download all listings, including titles, descriptions, categories, image URLs, and custom attributes.', 'listing-importer-for-hivepress' ); ?></p>
 
 			<form method="post" action="">
-				<?php wp_nonce_field( 'hp_pb_export_action', 'hp_pb_export_nonce' ); ?>
+				<?php wp_nonce_field( 'listing_importer_export_action', 'listing_importer_export_nonce' ); ?>
 
 				<table class="form-table">
 					<tr>
-						<th scope="row"><label for="export_category_id"><?php esc_html_e( 'Category Filter', 'pb-hivepress-import' ); ?></label></th>
+						<th scope="row"><label for="export_category_id"><?php esc_html_e( 'Category Filter', 'listing-importer-for-hivepress' ); ?></label></th>
 						<td>
 							<select name="category_id" id="export_category_id">
-								<option value=""><?php esc_html_e( '— All Categories —', 'pb-hivepress-import' ); ?></option>
+								<option value=""><?php esc_html_e( '— All Categories —', 'listing-importer-for-hivepress' ); ?></option>
 								<?php if ( ! empty( $categories ) && ! is_wp_error( $categories ) ) : ?>
 									<?php foreach ( $categories as $cat ) : ?>
 										<option value="<?php echo esc_attr( $cat->term_id ); ?>"><?php echo esc_html( $cat->name ); ?></option>
@@ -719,14 +760,14 @@ class Admin_Page {
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="export_delimiter"><?php esc_html_e( 'CSV Delimiter', 'pb-hivepress-import' ); ?></label></th>
+						<th scope="row"><label for="export_delimiter"><?php esc_html_e( 'CSV Delimiter', 'listing-importer-for-hivepress' ); ?></label></th>
 						<td>
 							<input type="text" name="delimiter" id="export_delimiter" value="," class="small-text" maxlength="1" required />
 						</td>
 					</tr>
 				</table>
 
-				<?php submit_button( __( 'Export Listings to CSV 📥', 'pb-hivepress-import' ), 'primary' ); ?>
+				<?php submit_button( __( 'Export Listings to CSV 📥', 'listing-importer-for-hivepress' ), 'primary' ); ?>
 			</form>
 		</div>
 		<?php

@@ -2,10 +2,11 @@
 /**
  * Exporter Engine.
  *
- * @package HivePress_Import_PB
+ * @package Listing_Importer_For_HivePress
+ * @license GPL-3.0-or-later
  */
 
-namespace HivePress_Import_PB;
+namespace Listing_Importer_For_HivePress;
 
 use HivePress\Models;
 use HivePress\Helpers as hp;
@@ -27,7 +28,7 @@ class Exporter {
 	 */
 	public static function export( $args = [] ) {
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'Unauthorized user.', 'pb-hivepress-import' ) );
+			wp_die( esc_html__( 'Unauthorized user.', 'listing-importer-for-hivepress' ) );
 		}
 
 		$category_id = ! empty( $args['category_id'] ) ? absint( $args['category_id'] ) : 0;
@@ -125,6 +126,15 @@ class Exporter {
 					$row[] = $val;
 				}
 			}
+
+			// Sanitize against CSV Formula Injection (CWE-1236)
+			$row = array_map( function( $cell ) {
+				$cell = (string) $cell;
+				if ( preg_match( '/^[=+\-@\t\r]/', $cell ) ) {
+					return "'" . $cell;
+				}
+				return $cell;
+			}, $row );
 
 			fputcsv( $output, $row, $delimiter );
 		}

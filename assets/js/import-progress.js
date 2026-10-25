@@ -4,14 +4,14 @@
  * Without JavaScript (or fetch support) the mapping form falls back to a
  * normal POST that imports everything in a single request.
  *
- * @package HivePress_Import_PB
+ * @package Listing_Importer_For_HivePress
  */
 ( function () {
 	'use strict';
 
-	var config = window.hpPbImport;
-	var form = document.getElementById( 'hp-pb-mapping-form' );
-	var panel = document.getElementById( 'hp-pb-progress' );
+	var config = window.listingImporterForHivePress || window.hpPbImport;
+	var form = document.getElementById( 'listing-importer-mapping-form' ) || document.getElementById( 'hp-pb-mapping-form' );
+	var panel = document.getElementById( 'listing-importer-progress' ) || document.getElementById( 'hp-pb-progress' );
 
 	if ( ! config || ! form || ! panel || ! window.fetch || ! window.FormData ) {
 		return;
@@ -22,8 +22,9 @@
 	var errorBox = panel.querySelector( '.hp-error-box' );
 	var errorList = errorBox.querySelector( 'ul' );
 	var actions = panel.querySelector( '.hp-progress-actions' );
-	var retryButton = document.getElementById( 'hp-pb-retry' );
-	var nonce = form.querySelector( '[name="hp_pb_process_nonce"]' ).value;
+	var retryButton = document.getElementById( 'listing-importer-retry' ) || document.getElementById( 'hp-pb-retry' );
+	var nonceEl = form.querySelector( '[name="listing_importer_process_nonce"]' ) || form.querySelector( '[name="hp_pb_process_nonce"]' );
+	var nonce = nonceEl ? nonceEl.value : '';
 	var running = false;
 
 	function format( template, values ) {
@@ -87,7 +88,7 @@
 	}
 
 	function runChunks() {
-		return post( 'hp_pb_import_chunk' ).then( function ( progress ) {
+		return post( 'listing_importer_chunk' ).then( function ( progress ) {
 			render( progress );
 
 			if ( progress.done ) {
@@ -122,10 +123,11 @@
 		var mapping = new FormData( form );
 
 		// Send only the mapping; the nonce field belongs to the non-JS form submission.
+		mapping.delete( 'listing_importer_process_nonce' );
 		mapping.delete( 'hp_pb_process_nonce' );
 		mapping.delete( '_wp_http_referer' );
 
-		post( 'hp_pb_import_start', mapping )
+		post( 'listing_importer_start', mapping )
 			.then( function ( progress ) {
 				render( progress );
 				return runChunks();
@@ -133,16 +135,18 @@
 			.catch( fail );
 	} );
 
-	retryButton.addEventListener( 'click', function () {
-		if ( running ) {
-			return;
-		}
+	if ( retryButton ) {
+		retryButton.addEventListener( 'click', function () {
+			if ( running ) {
+				return;
+			}
 
-		running = true;
-		actions.hidden = true;
-		text.textContent = config.i18n.resuming;
-		runChunks().catch( fail );
-	} );
+			running = true;
+			actions.hidden = true;
+			text.textContent = config.i18n.resuming;
+			runChunks().catch( fail );
+		} );
+	}
 
 	window.addEventListener( 'beforeunload', function ( event ) {
 		if ( running ) {
