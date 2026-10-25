@@ -165,8 +165,11 @@ class Image_Handler {
 			return new \WP_Error( 'invalid_url', esc_html__( 'Invalid or prohibited file URL provided.', 'listing-importer-for-hivepress' ) );
 		}
 
-		/* translators: %s: file extensions. */
-		$format_error = sprintf( __( 'Only %s files are allowed.', 'listing-importer-for-hivepress' ), strtoupper( implode( ', ', (array) $formats ) ) );
+		$format_error = sprintf(
+			/* translators: %s: allowed file extensions. */
+			__( 'Only %s files are allowed.', 'listing-importer-for-hivepress' ),
+			strtoupper( implode( ', ', (array) $formats ) )
+		);
 
 		// Reuse an attachment previously imported from this URL, if it suits this field.
 		$existing_id = self::find_reusable_attachment( md5( $url ), $post_parent );

@@ -187,14 +187,20 @@ class Importer {
 				$field->get_arg( 'options' )
 			);
 
-			/* translators: %s: option labels. */
-			return sprintf( __( 'Accepts any of these values: %s.', 'listing-importer-for-hivepress' ), implode( ', ', $field_labels ) );
+			return sprintf(
+				/* translators: %s: list of allowed option labels. */
+				__( 'Accepts any of these values: %s.', 'listing-importer-for-hivepress' ),
+				implode( ', ', $field_labels )
+			);
 		}
 
 		switch ( $field_type ) {
 			case 'attachment_upload':
-				/* translators: %s: file formats. */
-				return sprintf( __( 'Accepts URLs of these file formats: %s.', 'listing-importer-for-hivepress' ), strtoupper( implode( ', ', $field->get_formats() ) ) );
+				return sprintf(
+					/* translators: %s: allowed file formats. */
+					__( 'Accepts URLs of these file formats: %s.', 'listing-importer-for-hivepress' ),
+					strtoupper( implode( ', ', $field->get_formats() ) )
+				);
 
 			case 'date':
 				$field_format = 'Y-m-d';
@@ -205,15 +211,21 @@ class Importer {
 					$field_format .= ' H:i:s';
 				}
 
-				/* translators: %s: date format. */
-				return sprintf( __( 'Accepts dates in "%s" format.', 'listing-importer-for-hivepress' ), $field_format );
+				return sprintf(
+					/* translators: %s: date format string. */
+					__( 'Accepts dates in "%s" format.', 'listing-importer-for-hivepress' ),
+					$field_format
+				);
 
 			case 'embed':
 				return __( 'Accepts the embed URLs.', 'listing-importer-for-hivepress' );
 
 			case 'checkbox':
-				/* translators: %s: allowed value. */
-				return sprintf( __( 'Accepts "%s" or empty values.', 'listing-importer-for-hivepress' ), 1 );
+				return sprintf(
+					/* translators: %s: allowed value (e.g. 1). */
+					__( 'Accepts "%s" or empty values.', 'listing-importer-for-hivepress' ),
+					1
+				);
 
 			case 'time':
 				return __( 'Accepts times in seconds.', 'listing-importer-for-hivepress' );

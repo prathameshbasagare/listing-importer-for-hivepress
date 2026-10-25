@@ -150,8 +150,11 @@ class Admin_Page {
 	 * @return string
 	 */
 	protected static function get_missing_fields_message( $labels ) {
-		/* translators: %s: field labels. */
-		return sprintf( __( 'Please select a CSV column for these required fields: %s.', 'listing-importer-for-hivepress' ), implode( ', ', $labels ) );
+		return sprintf(
+			/* translators: %s: comma-separated list of required field labels. */
+			__( 'Please select a CSV column for these required fields: %s.', 'listing-importer-for-hivepress' ),
+			implode( ', ', $labels )
+		);
 	}
 
 	/**
@@ -709,7 +712,15 @@ class Admin_Page {
 					<ul style="list-style: disc; margin-left: 20px;">
 						<?php foreach ( $stats['errors'] as $row_num => $row_errors ) : ?>
 							<li>
-								<strong><?php printf( esc_html__( 'Row #%d:', 'listing-importer-for-hivepress' ), absint( $row_num ) ); ?></strong>
+								<strong>
+									<?php
+									printf(
+										/* translators: %d: CSV row number. */
+										esc_html__( 'Row #%d:', 'listing-importer-for-hivepress' ),
+										absint( $row_num )
+									);
+									?>
+								</strong>
 								<?php echo esc_html( implode( ' | ', (array) $row_errors ) ); ?>
 							</li>
 						<?php endforeach; ?>
