@@ -12,6 +12,7 @@
  * Domain Path: /languages
  * Requires at least: 5.8
  * Requires PHP: 7.4
+ * Requires Plugins: hivepress
  *
  * @package Listing_Importer_For_HivePress
  *

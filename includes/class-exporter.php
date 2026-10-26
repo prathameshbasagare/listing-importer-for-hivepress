@@ -76,8 +76,10 @@ class Exporter {
 		header( 'Pragma: no-cache' );
 		header( 'Expires: 0' );
 
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- Streaming directly to output stream.
 		$output = fopen( 'php://output', 'w' );
-		// Write UTF-8 BOM for Excel
+		// Write UTF-8 BOM for Excel.
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fputs -- Writing BOM to output stream.
 		fputs( $output, "\xEF\xBB\xBF" );
 		fputcsv( $output, $headers, $delimiter );
 
@@ -139,6 +141,7 @@ class Exporter {
 			fputcsv( $output, $row, $delimiter );
 		}
 
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing output stream.
 		fclose( $output );
 		exit;
 	}

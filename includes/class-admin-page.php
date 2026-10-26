@@ -75,6 +75,7 @@ class Admin_Page {
 			.hp-progress-stats strong { margin-right: 14px; }
 		' );
 
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Enqueueing scripts based on view step.
 		$step = isset( $_GET['step'] ) ? absint( $_GET['step'] ) : 1;
 		if ( 2 !== $step ) {
 			return;
@@ -163,6 +164,7 @@ class Admin_Page {
 	public static function ajax_import_start() {
 		$session = self::verify_ajax_request();
 
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified in verify_ajax_request().
 		$mappings = ! empty( $_POST['mapping'] ) && is_array( $_POST['mapping'] ) ? array_map( 'sanitize_text_field', wp_unslash( $_POST['mapping'] ) ) : [];
 		$missing  = Importer::get_unmapped_required_fields( Importer::get_mappable_fields( $session['category_id'], $session['mode'] ), $mappings );
 
@@ -211,7 +213,7 @@ class Admin_Page {
 			'mappings'    => $session['mappings'],
 			'offset'      => $offset,
 			'row_index'   => $session['row_index'],
-			'chunk_size'  => (int) apply_filters( 'listing_importer_for_hivepress_chunk_size', apply_filters( 'hp_pb_import_chunk_size', 5 ) ),
+			'chunk_size'  => (int) apply_filters( 'listing_importer_for_hivepress_chunk_size', 5 ),
 			'skip_first'  => $skip_first,
 			'on_progress' => function( $event ) use ( &$session, $session_key ) {
 				if ( 'start' === $event['type'] ) {
@@ -257,7 +259,7 @@ class Admin_Page {
 			], HOUR_IN_SECONDS );
 
 			if ( file_exists( $session['file_path'] ) ) {
-				@unlink( $session['file_path'] );
+				wp_delete_file( $session['file_path'] );
 			}
 			delete_transient( $session_key );
 
@@ -273,6 +275,7 @@ class Admin_Page {
 	 * Handle CSV Export direct downloads.
 	 */
 	public static function handle_export_request() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified immediately below.
 		$export_nonce = ! empty( $_POST['listing_importer_export_nonce'] ) ? sanitize_key( $_POST['listing_importer_export_nonce'] ) : ( ! empty( $_POST['hp_pb_export_nonce'] ) ? sanitize_key( $_POST['hp_pb_export_nonce'] ) : '' );
 		$is_valid     = $export_nonce && ( wp_verify_nonce( $export_nonce, 'listing_importer_export_action' ) || wp_verify_nonce( $export_nonce, 'hp_pb_export_action' ) );
 
@@ -298,6 +301,7 @@ class Admin_Page {
 		}
 
 		// Action 1: Upload file (Step 1 -> Step 2)
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified immediately below.
 		$upload_nonce    = ! empty( $_POST['listing_importer_upload_nonce'] ) ? sanitize_key( $_POST['listing_importer_upload_nonce'] ) : ( ! empty( $_POST['hp_pb_upload_nonce'] ) ? sanitize_key( $_POST['hp_pb_upload_nonce'] ) : '' );
 		$is_upload_valid = $upload_nonce && ( wp_verify_nonce( $upload_nonce, 'listing_importer_upload_action' ) || wp_verify_nonce( $upload_nonce, 'hp_pb_upload_action' ) );
 
@@ -318,27 +322,19 @@ class Admin_Page {
 				return;
 			}
 
-			// Save to uploads folder
-			$upload_dir = wp_upload_dir();
-			$target_dir = $upload_dir['basedir'] . '/hp_imports';
-			if ( ! file_exists( $target_dir ) ) {
-				wp_mkdir_p( $target_dir );
-			}
-			// Protect directory from direct listing / web execution
-			if ( ! file_exists( $target_dir . '/index.html' ) ) {
-				file_put_contents( $target_dir . '/index.html', '' );
-			}
-			if ( ! file_exists( $target_dir . '/.htaccess' ) ) {
-				file_put_contents( $target_dir . '/.htaccess', 'Deny from all' );
-			}
+			require_once ABSPATH . 'wp-admin/includes/file.php';
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- wp_handle_upload validates and handles the file array.
+			$uploaded = wp_handle_upload( $_FILES['csv_file'], [
+				'test_form' => false,
+				'test_type' => false,
+			] );
 
-			$filename    = 'import-' . wp_generate_password( 12, false, false ) . '.csv';
-			$target_path = $target_dir . '/' . $filename;
-
-			if ( ! move_uploaded_file( $_FILES['csv_file']['tmp_name'], $target_path ) ) {
-				add_settings_error( 'hp_import', 'upload_failed', esc_html__( 'Could not save uploaded CSV file.', 'listing-importer-for-hivepress' ) );
+			if ( isset( $uploaded['error'] ) ) {
+				add_settings_error( 'hp_import', 'upload_failed', esc_html( $uploaded['error'] ) );
 				return;
 			}
+
+			$target_path = $uploaded['file'];
 
 			$delimiter   = ! empty( $_POST['delimiter'] ) ? sanitize_text_field( wp_unslash( $_POST['delimiter'] ) ) : ',';
 			$mode        = ! empty( $_POST['mode'] ) ? sanitize_key( wp_unslash( $_POST['mode'] ) ) : 'create';
@@ -361,6 +357,7 @@ class Admin_Page {
 		}
 
 		// Action 2: Process Mapped Data (Step 2 -> Step 3)
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified immediately below.
 		$process_nonce    = ! empty( $_POST['listing_importer_process_nonce'] ) ? sanitize_key( $_POST['listing_importer_process_nonce'] ) : ( ! empty( $_POST['hp_pb_process_nonce'] ) ? sanitize_key( $_POST['hp_pb_process_nonce'] ) : '' );
 		$is_process_valid = $process_nonce && ( wp_verify_nonce( $process_nonce, 'listing_importer_process_action' ) || wp_verify_nonce( $process_nonce, 'hp_pb_process_action' ) );
 
@@ -394,7 +391,7 @@ class Admin_Page {
 			// Clean up imported file (kept on failure so the mapping step can be retried)
 			if ( ! empty( $result['success'] ) ) {
 				if ( file_exists( $session['file_path'] ) ) {
-					@unlink( $session['file_path'] );
+					wp_delete_file( $session['file_path'] );
 				}
 				delete_transient( 'hp_import_session_' . get_current_user_id() );
 			}
@@ -411,7 +408,9 @@ class Admin_Page {
 	 * Render Admin Dashboard Page.
 	 */
 	public static function render_page() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Tab and step determine view state only.
 		$step = isset( $_GET['step'] ) ? absint( $_GET['step'] ) : 1;
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Tab and step determine view state only.
 		$tab  = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'import';
 
 		?>
@@ -535,6 +534,7 @@ class Admin_Page {
 
 		$columns = Importer::get_csv_columns( $session['file_path'], $session['delimiter'] );
 		$fields  = Importer::get_mappable_fields( $session['category_id'], $session['mode'] );
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified when processing form submission.
 		$posted  = ! empty( $_POST['mapping'] ) && is_array( $_POST['mapping'] ) ? array_map( 'sanitize_text_field', wp_unslash( $_POST['mapping'] ) ) : [];
 		?>
 		<div class="hp-card">

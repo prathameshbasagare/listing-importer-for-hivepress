@@ -101,7 +101,7 @@ class Image_Handler {
 		}
 
 		if ( ! $ext ) {
-			@unlink( $tmp_file );
+			wp_delete_file( $tmp_file );
 			return new \WP_Error(
 				'unsupported_mime',
 				sprintf(
@@ -127,7 +127,7 @@ class Image_Handler {
 
 		// Delete temp file if still present
 		if ( file_exists( $tmp_file ) ) {
-			@unlink( $tmp_file );
+			wp_delete_file( $tmp_file );
 		}
 
 		if ( is_wp_error( $attachment_id ) ) {
@@ -210,12 +210,12 @@ class Image_Handler {
 		}
 
 		if ( ! $filename ) {
-			@unlink( $tmp_file );
-			return new \WP_Error( 'invalid_name', __( 'Invalid file name.', 'listing-importer-for-hivepress' ) );
+			wp_delete_file( $tmp_file );
+			return new \WP_Error( 'invalid_name', __( 'Invalid file name.', 'listing-importer-for-hivepress' ), 400 );
 		}
 
 		if ( $formats && ! hivepress()->attachment->is_valid_file( $tmp_file, $filename, $formats ) ) {
-			@unlink( $tmp_file );
+			wp_delete_file( $tmp_file );
 			return new \WP_Error( 'invalid_format', $format_error );
 		}
 
@@ -228,7 +228,7 @@ class Image_Handler {
 		);
 
 		if ( file_exists( $tmp_file ) ) {
-			@unlink( $tmp_file );
+			wp_delete_file( $tmp_file );
 		}
 
 		if ( is_wp_error( $attachment_id ) ) {
@@ -260,6 +260,7 @@ class Image_Handler {
 	protected static function find_reusable_attachment( $source_hash, $post_parent ) {
 		global $wpdb;
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$ids = $wpdb->get_col( $wpdb->prepare(
 			"SELECT pm.post_id FROM {$wpdb->postmeta} pm
 			INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id AND p.post_type = 'attachment'

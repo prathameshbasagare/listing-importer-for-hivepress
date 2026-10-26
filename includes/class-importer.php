@@ -270,12 +270,15 @@ class Importer {
 			return [];
 		}
 
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- Native stream required for fgetcsv.
 		$file = fopen( $filepath, 'r' );
 		if ( ! $file ) {
 			return [];
 		}
 
 		$columns = fgetcsv( $file, 0, $delimiter, '"', '\\' );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing CSV file pointer.
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing CSV file pointer.
 		fclose( $file );
 
 		if ( ! is_array( $columns ) ) {
@@ -297,6 +300,7 @@ class Importer {
 	 * @return int
 	 */
 	public static function count_rows( $file_path, $delimiter = ',' ) {
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- Native stream required for line-by-line counting.
 		$file = is_readable( $file_path ) ? fopen( $file_path, 'r' ) : false;
 		if ( ! $file ) {
 			return 0;
@@ -307,6 +311,8 @@ class Importer {
 			$count++;
 		}
 
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing CSV file pointer.
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing CSV file pointer.
 		fclose( $file );
 
 		return max( 0, $count );
@@ -685,6 +691,7 @@ class Importer {
 			return $result;
 		}
 
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- Native stream required for chunked fseek and fgetcsv.
 		$file = fopen( $file_path, 'r' );
 		if ( ! $file ) {
 			$result['message'] = __( 'Failed to open CSV file stream.', 'listing-importer-for-hivepress' );
@@ -694,7 +701,9 @@ class Importer {
 		if ( $offset ) {
 			fseek( $file, $offset );
 		} elseif ( ! fgetcsv( $file, 0, $delimiter, '"', '\\' ) ) {
-			fclose( $file );
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing CSV file pointer.
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing CSV file pointer.
+		fclose( $file );
 			$result['message'] = __( 'CSV file header is empty or invalid.', 'listing-importer-for-hivepress' );
 			return $result;
 		}
@@ -772,6 +781,7 @@ class Importer {
 		$result['done']      = false === fgetcsv( $file, 0, $delimiter, '"', '\\' );
 		$result['success']   = true;
 
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing CSV file pointer.
 		fclose( $file );
 
 		return $result;
