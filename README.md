@@ -1,27 +1,27 @@
-# Listing Importer for HivePress
+# CuriousWP Listing Importer for HivePress
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![WordPress](https://img.shields.io/badge/WordPress-5.8%2B-blue.svg)](https://wordpress.org)
 [![PHP](https://img.shields.io/badge/PHP-7.4%2B-green.svg)](https://php.net)
 
-**Listing Importer for HivePress** is a fast, reliable, admin-centric listings importer and exporter built specifically for [HivePress](https://hivepress.io). It allows you to import hundreds or thousands of listings from spreadsheets (CSV/TXT) without server timeouts, broken image URLs, or duplicate media clutter.
+**CuriousWP Listing Importer for HivePress** is a fast, reliable, admin-centric listings importer and exporter built specifically for [HivePress](https://hivepress.io). It allows you to import hundreds or thousands of listings from spreadsheets (CSV/TXT) smoothly without server timeouts, dynamic image issues, or duplicate media clutter.
 
 ---
 
-## 🌟 Why Use This Plugin?
+## 🌟 Built for Reliability & Scale
 
-If you run a directory, classifieds, or marketplace site on HivePress, adding listings manually one-by-one is impossible at scale. However, traditional WordPress importers often crash on large files or choke on modern image URLs.
+If you run a directory, classifieds, or marketplace site on HivePress, adding listings manually one-by-one is impossible at scale.
 
-This plugin was engineered from the ground up to solve the most common pain points:
+This plugin provides key capabilities to handle imports reliably:
 
-| Common Problem in Other Importers | How Listing Importer for HivePress Solves It |
+| Capability | How CuriousWP Listing Importer for HivePress Works |
 | :--- | :--- |
-| **Server 504 Timeouts & White Screens** | **Asynchronous AJAX Batching**: Imports rows in small chunks in the background with a real-time progress bar. |
-| **Interrupted Imports Require Starting Over** | **Crash/Resume Recovery**: Saves its byte offset after every row. A single click on *"Retry / Resume"* continues right where it stopped. |
-| **Broken Images from CDNs & Scrapers** | **Smart Binary MIME Detection**: Reads binary file headers of dynamic/extensionless URLs (Unsplash, Google Places, AWS S3) and auto-resolves `.jpg`, `.png`, `.webp`, `.avif`. |
-| **Media Library Bloat & Duplicates** | **Cryptographic Deduplication**: Re-uses existing media attachments based on source URL hashes instead of downloading duplicate files. |
-| **Messy CSV Headers from Scraper Tools** | **Auto-Label Conversion & Matching**: Automatically transforms dot-notated columns like `company_insights.founded_year` into readable labels and pre-matches them. |
-| **Need to Edit & Re-Import Data** | **Built-in CSV Exporter**: Exports listings with categories, custom attributes, and image URLs formatted with Excel UTF-8 BOM encoding. |
+| **Prevents Server Timeouts** | **Asynchronous AJAX Batching**: Imports rows in small chunks in the background with a real-time progress bar. |
+| **Automatic Resume & Recovery** | **Crash/Resume Recovery**: Saves its byte offset after every row. A single click on *"Retry / Resume"* continues right where it stopped. |
+| **Supports Dynamic CDN Images** | **Smart Binary MIME Detection**: Reads binary file headers of dynamic/extensionless URLs (Unsplash, Google Places, AWS S3) and auto-resolves `.jpg`, `.png`, `.webp`, `.avif`. |
+| **Prevents Media Duplication** | **Cryptographic Deduplication**: Re-uses existing media attachments based on source URL hashes instead of downloading duplicate files. |
+| **Clean Header Handling** | **Auto-Label Conversion & Matching**: Automatically transforms dot-notated columns like `company_insights.founded_year` into readable labels and pre-matches them. |
+| **Data Export** | **Built-in CSV Exporter**: Exports listings with categories, custom attributes, and image URLs formatted with Excel UTF-8 BOM encoding. |
 
 ---
 
@@ -49,7 +49,7 @@ This plugin was engineered from the ground up to solve the most common pain poin
 
 ## 🛠 Installation
 
-1. Download or clone this repository into `/wp-content/plugins/listing-importer-for-hivepress`.
+1. Download or clone this repository into `/wp-content/plugins/curiouswp-listing-importer-for-hivepress`.
 2. Activate the plugin in **WordPress Admin > Plugins**.
 3. Ensure the core **HivePress** plugin is active.
 4. Navigate to **Listings > Import Listings** to start importing.

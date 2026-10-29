@@ -2,11 +2,11 @@
 /**
  * Exporter Engine.
  *
- * @package Listing_Importer_For_HivePress
+ * @package CuriousWP_Listing_Importer_For_HivePress
  * @license GPL-3.0-or-later
  */
 
-namespace Listing_Importer_For_HivePress;
+namespace CuriousWP_Listing_Importer_For_HivePress;
 
 use HivePress\Models;
 use HivePress\Helpers as hp;
@@ -28,7 +28,7 @@ class Exporter {
 	 */
 	public static function export( $args = [] ) {
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'Unauthorized user.', 'listing-importer-for-hivepress' ) );
+			wp_die( esc_html__( 'Unauthorized user.', 'curiouswp-listing-importer-for-hivepress' ) );
 		}
 
 		$category_id = ! empty( $args['category_id'] ) ? absint( $args['category_id'] ) : 0;
@@ -65,7 +65,7 @@ class Exporter {
 		foreach ( $form_fields as $key => $field ) {
 			if ( ! in_array( $key, [ 'title', 'description', 'id', 'user', 'images', 'categories', 'featured', 'verified', 'status' ], true ) && $field->get_label() ) {
 				$custom_keys[ $key ] = $field->get_label();
-				$headers[] = $field->get_label();
+				$headers[]           = $field->get_label();
 			}
 		}
 
@@ -86,7 +86,7 @@ class Exporter {
 		foreach ( $listings as $listing ) {
 			// Categories
 			$cat_names = [];
-			$terms = wp_get_post_terms( $listing->get_id(), 'hp_listing_category' );
+			$terms     = wp_get_post_terms( $listing->get_id(), 'hp_listing_category' );
 			if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
 				foreach ( $terms as $term ) {
 					$cat_names[] = $term->name;
@@ -95,7 +95,7 @@ class Exporter {
 
 			// Images
 			$image_urls = [];
-			$img_ids = (array) $listing->get_images__id();
+			$img_ids    = (array) $listing->get_images__id();
 			foreach ( $img_ids as $img_id ) {
 				$url = wp_get_attachment_url( $img_id );
 				if ( $url ) {

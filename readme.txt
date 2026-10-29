@@ -1,47 +1,44 @@
-=== Listing Importer for HivePress ===
+=== CuriousWP Listing Importer for HivePress ===
 Contributors: curiouswpdev
 Donate link: https://github.com/
 Tags: hivepress, import, csv, listing, listings
 Requires at least: 5.8
-Tested up to: 7.1
+Tested up to: 6.7
 Requires PHP: 7.4
 Requires Plugins: hivepress
-Stable tag: 1.0.1
+Stable tag: 1.0.2
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
-Fast, reliable CSV listing importer and exporter for HivePress with chunked background batching, smart CDN image detection, and deduplication.
+Fast, reliable CSV listing importer and exporter for HivePress with chunked background batching, smart image MIME detection, and deduplication.
 
 == Description ==
 
-**Listing Importer for HivePress** is a powerful, user-friendly tool built to help you import hundreds or thousands of listings into your HivePress directory website effortlessly—without server timeouts, broken image links, or duplicate media clutter.
+**CuriousWP Listing Importer for HivePress** is a powerful, user-friendly tool built to help you import hundreds or thousands of listings into your HivePress directory website effortlessly—preventing server timeouts, handling dynamic image URLs, and avoiding duplicate media clutter.
 
 Whether you are building a real estate portal, business directory, classifieds site, or service marketplace, adding listings manually one-by-one is tedious and time-consuming. This plugin allows you to upload any standard spreadsheet (CSV or TXT), match your columns with a few clicks, and watch your listings get published with full attribute and gallery support.
 
 ---
 
-### What Makes This Importer Different?
+### Key Capabilities Built for Scale
 
-Most WordPress importers process the entire file in a single server request. On large files or when downloading remote images, your web server typically runs out of time after 30 to 60 seconds, resulting in frustrating **504 Gateway Timeouts**, white screens of death, and incomplete imports.
-
-**Listing Importer for HivePress solves this through five core innovations:**
+CuriousWP Listing Importer for HivePress provides five core innovations for reliable directory management:
 
 #### 1. Asynchronous Chunked Batching (No Timeouts)
-Instead of forcing your server to crunch thousands of listings at once, the plugin processes rows in small, manageable chunks in the background via AJAX. A real-time visual progress bar shows you exactly what row is currently being imported, how many listings have been created or updated, and any rows that encountered issues.
+Instead of processing an entire spreadsheet in a single server request, the plugin processes rows in small, manageable chunks in the background via AJAX. A real-time visual progress bar shows you exactly what row is currently being imported, how many listings have been created or updated, and any rows that encountered issues.
 
 #### 2. Automatic Resume & Failure Recovery
-If your internet drops or your server restarts midway through an import, you don't have to start over or clean up half-imported data. The plugin saves its exact byte offset after each row. Simply click **"Retry / Resume Import"**, and it picks up right where it stopped without re-importing earlier rows.
+If an import is interrupted by a temporary network drop or server restart, you do not have to start over or clean up half-imported data. The plugin saves its exact byte offset after each row. Simply click **"Retry / Resume Import"**, and it picks up right where it stopped without re-importing earlier rows.
 
-#### 3. Smart Binary MIME Sniffing for CDN & Extensionless Images
-Many modern image providers, scrapers, and CDNs (such as Unsplash, Google Places, AWS S3, or Cloudinary) provide image URLs that do not end with standard `.jpg` or `.png` extensions. Traditional importers reject these URLs as invalid.
+#### 3. Smart Binary MIME Sniffing for CDN & Dynamic Images
+Many modern image providers, scrapers, and CDNs (such as Unsplash, Google Places, AWS S3, or Cloudinary) provide image URLs that do not end with standard `.jpg` or `.png` extensions.
 Our plugin reads the actual binary header of the downloaded image file, automatically detects whether it is a JPEG, PNG, WebP, GIF, or AVIF image, assigns the correct extension, and sideloads it into your WordPress Media Library and HivePress listing gallery.
 
 #### 4. Image Deduplication (Saves Server Disk Space)
-Re-importing updated data often leads to duplicate images filling up your media library (`photo-1.jpg`, `photo-2.jpg`, etc.). This plugin calculates cryptographic hashes for each source image URL. If an image has already been imported, the plugin links the existing media file rather than downloading another copy, saving gigabytes of hosting disk space.
+Re-importing updated data can fill up your media library with redundant copies (`photo-1.jpg`, `photo-2.jpg`, etc.). This plugin calculates cryptographic hashes for each source image URL. If an image has already been imported, the plugin links the existing media file rather than downloading another copy, saving hosting disk space.
 
-#### 5. Intelligent Field Auto-Matching & Complex CSV Support
-If you export data from scraping tools (like Outscraper or Google Maps scrapers), column headers often look like `company_insights.founded_year` or `contact_details.phone`.
-The plugin automatically cleans these into readable labels (`Company Insights → Founded Year`) and intelligently pre-selects matching HivePress fields (Title, Description, Images, Categories, Location, Phone, etc.).
+#### 5. Intelligent Field Auto-Matching & Clean Headers
+If you export data from tools with nested or dotted column headers (such as `company_insights.founded_year` or `contact_details.phone`), the plugin automatically cleans these into readable labels (`Company Insights → Founded Year`) and pre-selects matching HivePress fields (Title, Description, Images, Categories, Location, Phone, etc.).
 
 ---
 
@@ -71,7 +68,7 @@ The plugin automatically cleans these into readable labels (`Company Insights �
 
 == Installation ==
 
-1. Upload the `listing-importer-for-hivepress` folder to your `/wp-content/plugins/` directory, or install the plugin ZIP file via **Plugins > Add New > Upload Plugin**.
+1. Upload the `curiouswp-listing-importer-for-hivepress` folder to your `/wp-content/plugins/` directory, or install the plugin ZIP file via **Plugins > Add New > Upload Plugin**.
 2. Activate the plugin through the **Plugins** menu in WordPress.
 3. Ensure the core **HivePress** plugin is installed and activated.
 4. Navigate to **Listings > Import Listings** in your WordPress admin sidebar to start importing or exporting.
@@ -87,7 +84,7 @@ Separate image URLs with commas inside the image column, like this:
 The plugin will download each image, attach the first one as the listing's featured image, and attach the rest to the HivePress image gallery.
 
 = Can I import images from Unsplash, Google Places, or AWS S3 without file extensions? =
-Yes! Unlike standard importers that fail when a URL does not end in `.jpg` or `.png`, our smart MIME detection inspects the binary content of the file and assigns the correct extension (`.jpg`, `.png`, `.webp`, `.avif`) automatically.
+Yes! The plugin inspects the binary content of the file and assigns the correct extension (`.jpg`, `.png`, `.webp`, `.avif`) automatically.
 
 = Will re-importing duplicate my images? =
 No. The plugin stores a checksum hash of each imported image source URL. If you re-import or update listings with the same image URLs, it reuses the existing file in your WordPress Media Library.
@@ -112,6 +109,11 @@ Yes. Click the **"Export Listings"** tab at the top of the page. You can filter 
 4. **CSV Export Utility**: One-click listing export filtered by category with custom delimiter selection.
 
 == Changelog ==
+
+= 1.0.2 =
+* Renamed to CuriousWP Listing Importer for HivePress to comply with WordPress.org trademark and distinctiveness guidelines.
+* Refactored internal prefixes and transient storage to prevent naming collisions.
+* Refined documentation and descriptions in compliance with WordPress repository guidelines.
 
 = 1.0.1 =
 * Fully standardized for the WordPress.org Plugin Directory.

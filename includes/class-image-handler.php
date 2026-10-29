@@ -2,11 +2,11 @@
 /**
  * Image Downloader & Sideload Handler.
  *
- * @package Listing_Importer_For_HivePress
+ * @package CuriousWP_Listing_Importer_For_HivePress
  * @license GPL-3.0-or-later
  */
 
-namespace Listing_Importer_For_HivePress;
+namespace CuriousWP_Listing_Importer_For_HivePress;
 
 // Exit if accessed directly.
 defined( 'ABSPATH' ) || exit;
@@ -14,13 +14,13 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Class Image_Handler
  *
-* Downloads remote images, reliably detects actual binary MIME types,
-	 * generates appropriate file extensions for extensionless/CDN URLs,
-	 * and sideloads them into the WordPress Media Library.
-	 *
-	 * Image deduplication: Before downloading, checks if an attachment
-	 * with the same source URL hash already exists in the Media Library.
-	 * If found, reuses the existing attachment ID to prevent duplicate files.
+ * Downloads remote images, reliably detects actual binary MIME types,
+ * generates appropriate file extensions for extensionless/CDN URLs,
+ * and sideloads them into the WordPress Media Library.
+ *
+ * Image deduplication: Before downloading, checks if an attachment
+ * with the same source URL hash already exists in the Media Library.
+ * If found, reuses the existing attachment ID to prevent duplicate files.
  */
 class Image_Handler {
 
@@ -30,14 +30,14 @@ class Image_Handler {
 	 * @var array
 	 */
 	protected static $mime_to_ext = [
-		'image/jpeg' => 'jpg',
-		'image/jpg'  => 'jpg',
-		'image/png'  => 'png',
-		'image/gif'  => 'gif',
-		'image/webp' => 'webp',
-		'image/avif' => 'avif',
-		'image/bmp'  => 'bmp',
-		'image/tiff' => 'tiff',
+		'image/jpeg'    => 'jpg',
+		'image/jpg'     => 'jpg',
+		'image/png'     => 'png',
+		'image/gif'     => 'gif',
+		'image/webp'    => 'webp',
+		'image/avif'    => 'avif',
+		'image/bmp'     => 'bmp',
+		'image/tiff'    => 'tiff',
 		'image/svg+xml' => 'svg',
 	];
 
@@ -45,7 +45,7 @@ class Image_Handler {
 	 * Download a remote image, detect MIME type, ensure correct extension, and sideload to WP Media.
 	 *
 	 * @param string $url Remote image URL.
-	 * @param int $post_parent Optional post ID to attach the media to.
+	 * @param int    $post_parent Optional post ID to attach the media to.
 	 * @param string $parent_field Field name in HivePress (default 'images').
 	 * @return int|\WP_Error Attachment ID on success, or WP_Error on failure.
 	 */
@@ -53,7 +53,7 @@ class Image_Handler {
 		$url = esc_url_raw( trim( $url ) );
 
 		if ( empty( $url ) || ! wp_http_validate_url( $url ) ) {
-			return new \WP_Error( 'invalid_url', esc_html__( 'Invalid or prohibited image URL provided.', 'listing-importer-for-hivepress' ) );
+			return new \WP_Error( 'invalid_url', esc_html__( 'Invalid or prohibited image URL provided.', 'curiouswp-listing-importer-for-hivepress' ) );
 		}
 
 		// Image deduplication: reuse an attachment previously imported from this URL.
@@ -106,7 +106,7 @@ class Image_Handler {
 				'unsupported_mime',
 				sprintf(
 					/* translators: 1: detected mime type, 2: url */
-					__( 'Unsupported image type "%1$s" for URL: %2$s', 'listing-importer-for-hivepress' ),
+					__( 'Unsupported image type "%1$s" for URL: %2$s', 'curiouswp-listing-importer-for-hivepress' ),
 					$mime_type ? $mime_type : 'unknown',
 					$url
 				)
@@ -141,7 +141,7 @@ class Image_Handler {
 		}
 
 		// Step 7: Store source URL hash for deduplication
-		update_post_meta( $attachment_id, '_hp_import_source_hash', md5( $url ) );
+		update_post_meta( $attachment_id, '_curiouswp_li_source_hash', md5( $url ) );
 
 		return $attachment_id;
 	}
@@ -162,12 +162,12 @@ class Image_Handler {
 		$url = esc_url_raw( trim( $url ) );
 
 		if ( empty( $url ) || ! wp_http_validate_url( $url ) ) {
-			return new \WP_Error( 'invalid_url', esc_html__( 'Invalid or prohibited file URL provided.', 'listing-importer-for-hivepress' ) );
+			return new \WP_Error( 'invalid_url', esc_html__( 'Invalid or prohibited file URL provided.', 'curiouswp-listing-importer-for-hivepress' ) );
 		}
 
 		$format_error = sprintf(
 			/* translators: %s: allowed file extensions. */
-			__( 'Only %s files are allowed.', 'listing-importer-for-hivepress' ),
+			__( 'Only %s files are allowed.', 'curiouswp-listing-importer-for-hivepress' ),
 			strtoupper( implode( ', ', (array) $formats ) )
 		);
 
@@ -211,7 +211,7 @@ class Image_Handler {
 
 		if ( ! $filename ) {
 			wp_delete_file( $tmp_file );
-			return new \WP_Error( 'invalid_name', __( 'Invalid file name.', 'listing-importer-for-hivepress' ), 400 );
+			return new \WP_Error( 'invalid_name', __( 'Invalid file name.', 'curiouswp-listing-importer-for-hivepress' ), 400 );
 		}
 
 		if ( $formats && ! hivepress()->attachment->is_valid_file( $tmp_file, $filename, $formats ) ) {
@@ -237,7 +237,7 @@ class Image_Handler {
 
 		update_post_meta( $attachment_id, 'hp_parent_model', 'listing' );
 		update_post_meta( $attachment_id, 'hp_parent_field', sanitize_key( $parent_field ) );
-		update_post_meta( $attachment_id, '_hp_import_source_hash', md5( $url ) );
+		update_post_meta( $attachment_id, '_curiouswp_li_source_hash', md5( $url ) );
 
 		return $attachment_id;
 	}
@@ -249,9 +249,7 @@ class Image_Handler {
 	 * HivePress links gallery images one-to-many via post_parent, so an attachment
 	 * still owned by another live listing is not reused (that would remove it from
 	 * that listing). Attachments that are unattached, already on this post, or
-	 * whose parent is not a live listing are reusable. The latter includes images
-	 * of trashed listings and of deleted listings, which WordPress re-parents to
-	 * the listing's own parent (the HivePress vendor).
+	 * whose parent is not a live listing are reusable.
 	 *
 	 * @param string $source_hash MD5 of the source URL.
 	 * @param int    $post_parent Target post ID.
@@ -264,7 +262,7 @@ class Image_Handler {
 		$ids = $wpdb->get_col( $wpdb->prepare(
 			"SELECT pm.post_id FROM {$wpdb->postmeta} pm
 			INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id AND p.post_type = 'attachment'
-			WHERE pm.meta_key = '_hp_import_source_hash' AND pm.meta_value = %s
+			WHERE pm.meta_key IN ('_curiouswp_li_source_hash', '_hp_import_source_hash') AND pm.meta_value = %s
 			ORDER BY pm.post_id ASC",
 			$source_hash
 		) );

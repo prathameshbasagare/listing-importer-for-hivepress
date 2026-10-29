@@ -1,20 +1,20 @@
 <?php
 /**
- * Plugin Name: Listing Importer for HivePress
- * Plugin URI: https://wordpress.org/plugins/listing-importer-for-hivepress/
+ * Plugin Name: CuriousWP Listing Importer for HivePress
+ * Plugin URI: https://wordpress.org/plugins/curiouswp-listing-importer-for-hivepress/
  * Description: Fast, batch-processed CSV importer and exporter for HivePress listings with intelligent MIME detection for CDN images and deduplication.
- * Version: 1.0.1
+ * Version: 1.0.2
  * Author: curiouswpdev
  * Author URI: https://profiles.wordpress.org/curiouswpdev/
  * License: GPLv3 or later
  * License URI: https://www.gnu.org/licenses/gpl-3.0.html
- * Text Domain: listing-importer-for-hivepress
+ * Text Domain: curiouswp-listing-importer-for-hivepress
  * Domain Path: /languages
  * Requires at least: 5.8
  * Requires PHP: 7.4
  * Requires Plugins: hivepress
  *
- * @package Listing_Importer_For_HivePress
+ * @package CuriousWP_Listing_Importer_For_HivePress
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,7 +35,7 @@ defined( 'ABSPATH' ) || exit;
 
 // Autoload plugin classes.
 spl_autoload_register( function( $class ) {
-	$prefix = 'Listing_Importer_For_HivePress\\';
+	$prefix   = 'CuriousWP_Listing_Importer_For_HivePress\\';
 	$base_dir = __DIR__ . '/includes/';
 
 	$len = strlen( $prefix );
@@ -44,7 +44,7 @@ spl_autoload_register( function( $class ) {
 	}
 
 	$relative_class = substr( $class, $len );
-	$file = $base_dir . 'class-' . strtolower( str_replace( '_', '-', $relative_class ) ) . '.php';
+	$file           = $base_dir . 'class-' . strtolower( str_replace( '_', '-', $relative_class ) ) . '.php';
 
 	if ( file_exists( $file ) ) {
 		require_once $file;
@@ -59,7 +59,7 @@ add_action( 'plugins_loaded', function() {
 	if ( ! function_exists( 'hivepress' ) ) {
 		add_action( 'admin_notices', function() {
 			echo '<div class="notice notice-warning is-dismissible"><p>' .
-				esc_html__( 'Listing Importer for HivePress requires the HivePress plugin to be active.', 'listing-importer-for-hivepress' ) .
+				esc_html__( 'CuriousWP Listing Importer for HivePress requires the HivePress plugin to be active.', 'curiouswp-listing-importer-for-hivepress' ) .
 				'</p></div>';
 		} );
 		return;
@@ -67,6 +67,6 @@ add_action( 'plugins_loaded', function() {
 
 	// Initialize Admin Wizard.
 	if ( is_admin() ) {
-		Listing_Importer_For_HivePress\Admin_Page::init();
+		CuriousWP_Listing_Importer_For_HivePress\Admin_Page::init();
 	}
 } );
