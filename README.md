@@ -49,7 +49,7 @@ This plugin provides key capabilities to handle imports reliably:
 
 ## 🛠 Installation
 
-1. Download or clone this repository into `/wp-content/plugins/listonix-listing-importer-for-hivepress`.
+1. Upload the plugin ZIP file via **Plugins > Add New > Upload Plugin**, or place the `listonix-listing-importer-for-hivepress` folder in your `/wp-content/plugins/` directory.
 2. Activate the plugin in **WordPress Admin > Plugins**.
 3. Ensure the core **HivePress** plugin is active.
 4. Navigate to **Listings > Import Listings** to start importing.

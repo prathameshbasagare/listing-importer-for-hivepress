@@ -1,6 +1,5 @@
 === Listonix: Listing Importer for HivePress ===
 Contributors: curiouswpdev
-Donate link: https://github.com/
 Tags: hivepress, import, csv, listing, listings
 Requires at least: 5.8
 Tested up to: 7.1
