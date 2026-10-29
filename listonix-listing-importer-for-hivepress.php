@@ -70,3 +70,16 @@ add_action( 'plugins_loaded', function() {
 		Listonix_Listing_Importer_For_HivePress\Admin_Page::init();
 	}
 } );
+
+/**
+ * Add shortcut action link on the Plugins page.
+ */
+add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), function( $links ) {
+	$action_links = [
+		'<a href="' . esc_url( admin_url( 'edit.php?post_type=hp_listing&page=' . Listonix_Listing_Importer_For_HivePress\Admin_Page::PAGE_SLUG ) ) . '">' .
+			esc_html__( 'Import Listings', 'listonix-listing-importer-for-hivepress' ) .
+		'</a>',
+	];
+
+	return array_merge( $action_links, $links );
+} );
