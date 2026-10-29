@@ -2,11 +2,11 @@
 /**
  * Exporter Engine.
  *
- * @package CuriousWP_Listing_Importer_For_HivePress
+ * @package Listonix_Listing_Importer_For_HivePress
  * @license GPL-3.0-or-later
  */
 
-namespace CuriousWP_Listing_Importer_For_HivePress;
+namespace Listonix_Listing_Importer_For_HivePress;
 
 use HivePress\Models;
 use HivePress\Helpers as hp;
@@ -28,7 +28,7 @@ class Exporter {
 	 */
 	public static function export( $args = [] ) {
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'Unauthorized user.', 'curiouswp-listing-importer-for-hivepress' ) );
+			wp_die( esc_html__( 'Unauthorized user.', 'listonix-listing-importer-for-hivepress' ) );
 		}
 
 		$category_id = ! empty( $args['category_id'] ) ? absint( $args['category_id'] ) : 0;

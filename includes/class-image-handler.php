@@ -2,11 +2,11 @@
 /**
  * Image Downloader & Sideload Handler.
  *
- * @package CuriousWP_Listing_Importer_For_HivePress
+ * @package Listonix_Listing_Importer_For_HivePress
  * @license GPL-3.0-or-later
  */
 
-namespace CuriousWP_Listing_Importer_For_HivePress;
+namespace Listonix_Listing_Importer_For_HivePress;
 
 // Exit if accessed directly.
 defined( 'ABSPATH' ) || exit;
@@ -53,7 +53,7 @@ class Image_Handler {
 		$url = esc_url_raw( trim( $url ) );
 
 		if ( empty( $url ) || ! wp_http_validate_url( $url ) ) {
-			return new \WP_Error( 'invalid_url', esc_html__( 'Invalid or prohibited image URL provided.', 'curiouswp-listing-importer-for-hivepress' ) );
+			return new \WP_Error( 'invalid_url', esc_html__( 'Invalid or prohibited image URL provided.', 'listonix-listing-importer-for-hivepress' ) );
 		}
 
 		// Image deduplication: reuse an attachment previously imported from this URL.
@@ -106,7 +106,7 @@ class Image_Handler {
 				'unsupported_mime',
 				sprintf(
 					/* translators: 1: detected mime type, 2: url */
-					__( 'Unsupported image type "%1$s" for URL: %2$s', 'curiouswp-listing-importer-for-hivepress' ),
+					__( 'Unsupported image type "%1$s" for URL: %2$s', 'listonix-listing-importer-for-hivepress' ),
 					$mime_type ? $mime_type : 'unknown',
 					$url
 				)
@@ -141,7 +141,7 @@ class Image_Handler {
 		}
 
 		// Step 7: Store source URL hash for deduplication
-		update_post_meta( $attachment_id, '_curiouswp_li_source_hash', md5( $url ) );
+		update_post_meta( $attachment_id, '_listonix_source_hash', md5( $url ) );
 
 		return $attachment_id;
 	}
@@ -162,12 +162,12 @@ class Image_Handler {
 		$url = esc_url_raw( trim( $url ) );
 
 		if ( empty( $url ) || ! wp_http_validate_url( $url ) ) {
-			return new \WP_Error( 'invalid_url', esc_html__( 'Invalid or prohibited file URL provided.', 'curiouswp-listing-importer-for-hivepress' ) );
+			return new \WP_Error( 'invalid_url', esc_html__( 'Invalid or prohibited file URL provided.', 'listonix-listing-importer-for-hivepress' ) );
 		}
 
 		$format_error = sprintf(
 			/* translators: %s: allowed file extensions. */
-			__( 'Only %s files are allowed.', 'curiouswp-listing-importer-for-hivepress' ),
+			__( 'Only %s files are allowed.', 'listonix-listing-importer-for-hivepress' ),
 			strtoupper( implode( ', ', (array) $formats ) )
 		);
 
@@ -211,7 +211,7 @@ class Image_Handler {
 
 		if ( ! $filename ) {
 			wp_delete_file( $tmp_file );
-			return new \WP_Error( 'invalid_name', __( 'Invalid file name.', 'curiouswp-listing-importer-for-hivepress' ), 400 );
+			return new \WP_Error( 'invalid_name', __( 'Invalid file name.', 'listonix-listing-importer-for-hivepress' ), 400 );
 		}
 
 		if ( $formats && ! hivepress()->attachment->is_valid_file( $tmp_file, $filename, $formats ) ) {
@@ -237,7 +237,7 @@ class Image_Handler {
 
 		update_post_meta( $attachment_id, 'hp_parent_model', 'listing' );
 		update_post_meta( $attachment_id, 'hp_parent_field', sanitize_key( $parent_field ) );
-		update_post_meta( $attachment_id, '_curiouswp_li_source_hash', md5( $url ) );
+		update_post_meta( $attachment_id, '_listonix_source_hash', md5( $url ) );
 
 		return $attachment_id;
 	}
@@ -264,8 +264,14 @@ class Image_Handler {
 			'no_found_rows'          => true,
 			'update_post_meta_cache' => false,
 			'update_post_term_cache' => false,
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Deduplication lookup by source URL hash.
 			'meta_query'             => [
 				'relation' => 'OR',
+				[
+					'key'     => '_listonix_source_hash',
+					'value'   => $source_hash,
+					'compare' => '=',
+				],
 				[
 					'key'     => '_curiouswp_li_source_hash',
 					'value'   => $source_hash,

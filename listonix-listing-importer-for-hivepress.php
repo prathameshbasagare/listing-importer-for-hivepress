@@ -1,20 +1,20 @@
 <?php
 /**
- * Plugin Name: CuriousWP Listing Importer for HivePress
- * Plugin URI: https://wordpress.org/plugins/curiouswp-listing-importer-for-hivepress/
+ * Plugin Name: Listonix: Listing Importer for HivePress
+ * Plugin URI: https://wordpress.org/plugins/listonix-listing-importer-for-hivepress/
  * Description: Fast, batch-processed CSV importer and exporter for HivePress listings with intelligent MIME detection for CDN images and deduplication.
  * Version: 1.0.2
  * Author: curiouswpdev
  * Author URI: https://profiles.wordpress.org/curiouswpdev/
  * License: GPLv3 or later
  * License URI: https://www.gnu.org/licenses/gpl-3.0.html
- * Text Domain: curiouswp-listing-importer-for-hivepress
+ * Text Domain: listonix-listing-importer-for-hivepress
  * Domain Path: /languages
  * Requires at least: 5.8
  * Requires PHP: 7.4
  * Requires Plugins: hivepress
  *
- * @package CuriousWP_Listing_Importer_For_HivePress
+ * @package Listonix_Listing_Importer_For_HivePress
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,7 +35,7 @@ defined( 'ABSPATH' ) || exit;
 
 // Autoload plugin classes.
 spl_autoload_register( function( $class ) {
-	$prefix   = 'CuriousWP_Listing_Importer_For_HivePress\\';
+	$prefix   = 'Listonix_Listing_Importer_For_HivePress\\';
 	$base_dir = __DIR__ . '/includes/';
 
 	$len = strlen( $prefix );
@@ -59,7 +59,7 @@ add_action( 'plugins_loaded', function() {
 	if ( ! function_exists( 'hivepress' ) ) {
 		add_action( 'admin_notices', function() {
 			echo '<div class="notice notice-warning is-dismissible"><p>' .
-				esc_html__( 'CuriousWP Listing Importer for HivePress requires the HivePress plugin to be active.', 'curiouswp-listing-importer-for-hivepress' ) .
+				esc_html__( 'Listonix: Listing Importer for HivePress requires the HivePress plugin to be active.', 'listonix-listing-importer-for-hivepress' ) .
 				'</p></div>';
 		} );
 		return;
@@ -67,6 +67,6 @@ add_action( 'plugins_loaded', function() {
 
 	// Initialize Admin Wizard.
 	if ( is_admin() ) {
-		CuriousWP_Listing_Importer_For_HivePress\Admin_Page::init();
+		Listonix_Listing_Importer_For_HivePress\Admin_Page::init();
 	}
 } );

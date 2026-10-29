@@ -1,10 +1,10 @@
-# CuriousWP Listing Importer for HivePress
+# Listonix: Listing Importer for HivePress
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![WordPress](https://img.shields.io/badge/WordPress-5.8%2B-blue.svg)](https://wordpress.org)
 [![PHP](https://img.shields.io/badge/PHP-7.4%2B-green.svg)](https://php.net)
 
-**CuriousWP Listing Importer for HivePress** is a fast, reliable, admin-centric listings importer and exporter built specifically for [HivePress](https://hivepress.io). It allows you to import hundreds or thousands of listings from spreadsheets (CSV/TXT) smoothly without server timeouts, dynamic image issues, or duplicate media clutter.
+**Listonix: Listing Importer for HivePress** is a fast, reliable, admin-centric listings importer and exporter built specifically for [HivePress](https://hivepress.io). It allows you to import hundreds or thousands of listings from spreadsheets (CSV/TXT) smoothly without server timeouts, dynamic image issues, or duplicate media clutter.
 
 ---
 
@@ -14,7 +14,7 @@ If you run a directory, classifieds, or marketplace site on HivePress, adding li
 
 This plugin provides key capabilities to handle imports reliably:
 
-| Capability | How CuriousWP Listing Importer for HivePress Works |
+| Capability | How Listonix Works |
 | :--- | :--- |
 | **Prevents Server Timeouts** | **Asynchronous AJAX Batching**: Imports rows in small chunks in the background with a real-time progress bar. |
 | **Automatic Resume & Recovery** | **Crash/Resume Recovery**: Saves its byte offset after every row. A single click on *"Retry / Resume"* continues right where it stopped. |
@@ -49,7 +49,7 @@ This plugin provides key capabilities to handle imports reliably:
 
 ## 🛠 Installation
 
-1. Download or clone this repository into `/wp-content/plugins/curiouswp-listing-importer-for-hivepress`.
+1. Download or clone this repository into `/wp-content/plugins/listonix-listing-importer-for-hivepress`.
 2. Activate the plugin in **WordPress Admin > Plugins**.
 3. Ensure the core **HivePress** plugin is active.
 4. Navigate to **Listings > Import Listings** to start importing.

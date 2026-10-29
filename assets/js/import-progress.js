@@ -4,26 +4,26 @@
  * Without JavaScript (or fetch support) the mapping form falls back to a
  * normal POST that imports everything in a single request.
  *
- * @package CuriousWP_Listing_Importer_For_HivePress
+ * @package Listonix_Listing_Importer_For_HivePress
  */
 ( function () {
 	'use strict';
 
-	var config = window.curiouswpListingImporter || window.listingImporterForHivePress || window.hpPbImport;
-	var form = document.getElementById( 'curiouswp-li-mapping-form' ) || document.getElementById( 'listing-importer-mapping-form' );
-	var panel = document.getElementById( 'curiouswp-li-progress' ) || document.getElementById( 'listing-importer-progress' );
+	var config = window.listonixImporter || window.curiouswpListingImporter || window.listingImporterForHivePress || window.hpPbImport;
+	var form = document.getElementById( 'listonix-mapping-form' ) || document.getElementById( 'curiouswp-li-mapping-form' ) || document.getElementById( 'listing-importer-mapping-form' );
+	var panel = document.getElementById( 'listonix-progress' ) || document.getElementById( 'curiouswp-li-progress' ) || document.getElementById( 'listing-importer-progress' );
 
 	if ( ! config || ! form || ! panel || ! window.fetch || ! window.FormData ) {
 		return;
 	}
 
-	var bar = panel.querySelector( '.curiouswp-li-progress-bar' ) || panel.querySelector( '.hp-progress-bar' );
-	var text = panel.querySelector( '.curiouswp-li-progress-text' ) || panel.querySelector( '.hp-progress-text' );
-	var errorBox = panel.querySelector( '.curiouswp-li-error-box' ) || panel.querySelector( '.hp-error-box' );
+	var bar = panel.querySelector( '.listonix-progress-bar' ) || panel.querySelector( '.curiouswp-li-progress-bar' ) || panel.querySelector( '.hp-progress-bar' );
+	var text = panel.querySelector( '.listonix-progress-text' ) || panel.querySelector( '.curiouswp-li-progress-text' ) || panel.querySelector( '.hp-progress-text' );
+	var errorBox = panel.querySelector( '.listonix-error-box' ) || panel.querySelector( '.curiouswp-li-error-box' ) || panel.querySelector( '.hp-error-box' );
 	var errorList = errorBox.querySelector( 'ul' );
-	var actions = panel.querySelector( '.curiouswp-li-progress-actions' ) || panel.querySelector( '.hp-progress-actions' );
-	var retryButton = document.getElementById( 'curiouswp-li-retry' ) || document.getElementById( 'listing-importer-retry' );
-	var nonceEl = form.querySelector( '[name="curiouswp_li_process_nonce"]' ) || form.querySelector( '[name="listing_importer_process_nonce"]' );
+	var actions = panel.querySelector( '.listonix-progress-actions' ) || panel.querySelector( '.curiouswp-li-progress-actions' ) || panel.querySelector( '.hp-progress-actions' );
+	var retryButton = document.getElementById( 'listonix-retry' ) || document.getElementById( 'curiouswp-li-retry' ) || document.getElementById( 'listing-importer-retry' );
+	var nonceEl = form.querySelector( '[name="listonix_process_nonce"]' ) || form.querySelector( '[name="curiouswp_li_process_nonce"]' ) || form.querySelector( '[name="listing_importer_process_nonce"]' );
 	var nonce = nonceEl ? nonceEl.value : '';
 	var running = false;
 
@@ -91,7 +91,7 @@
 	}
 
 	function runChunks() {
-		return post( 'curiouswp_li_chunk' ).then( function ( progress ) {
+		return post( 'listonix_chunk' ).then( function ( progress ) {
 			render( progress );
 
 			if ( progress.done ) {
@@ -126,11 +126,12 @@
 		var mapping = new FormData( form );
 
 		// Send only the mapping; the nonce field belongs to the non-JS form submission.
+		mapping.delete( 'listonix_process_nonce' );
 		mapping.delete( 'curiouswp_li_process_nonce' );
 		mapping.delete( 'listing_importer_process_nonce' );
 		mapping.delete( '_wp_http_referer' );
 
-		post( 'curiouswp_li_start', mapping )
+		post( 'listonix_start', mapping )
 			.then( function ( progress ) {
 				render( progress );
 				return runChunks();

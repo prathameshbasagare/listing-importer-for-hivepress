@@ -1,9 +1,9 @@
-=== CuriousWP Listing Importer for HivePress ===
+=== Listonix: Listing Importer for HivePress ===
 Contributors: curiouswpdev
 Donate link: https://github.com/
 Tags: hivepress, import, csv, listing, listings
 Requires at least: 5.8
-Tested up to: 6.7
+Tested up to: 7.1
 Requires PHP: 7.4
 Requires Plugins: hivepress
 Stable tag: 1.0.2
@@ -14,7 +14,7 @@ Fast, reliable CSV listing importer and exporter for HivePress with chunked back
 
 == Description ==
 
-**CuriousWP Listing Importer for HivePress** is a powerful, user-friendly tool built to help you import hundreds or thousands of listings into your HivePress directory website effortlessly—preventing server timeouts, handling dynamic image URLs, and avoiding duplicate media clutter.
+**Listonix: Listing Importer for HivePress** is a powerful, user-friendly tool built to help you import hundreds or thousands of listings into your HivePress directory website effortlessly—preventing server timeouts, handling dynamic image URLs, and avoiding duplicate media clutter.
 
 Whether you are building a real estate portal, business directory, classifieds site, or service marketplace, adding listings manually one-by-one is tedious and time-consuming. This plugin allows you to upload any standard spreadsheet (CSV or TXT), match your columns with a few clicks, and watch your listings get published with full attribute and gallery support.
 
@@ -22,7 +22,7 @@ Whether you are building a real estate portal, business directory, classifieds s
 
 ### Key Capabilities Built for Scale
 
-CuriousWP Listing Importer for HivePress provides five core innovations for reliable directory management:
+Listonix provides five core innovations for reliable directory management:
 
 #### 1. Asynchronous Chunked Batching (No Timeouts)
 Instead of processing an entire spreadsheet in a single server request, the plugin processes rows in small, manageable chunks in the background via AJAX. A real-time visual progress bar shows you exactly what row is currently being imported, how many listings have been created or updated, and any rows that encountered issues.
@@ -68,18 +68,18 @@ If you export data from tools with nested or dotted column headers (such as `com
 
 == Installation ==
 
-1. Upload the `curiouswp-listing-importer-for-hivepress` folder to your `/wp-content/plugins/` directory, or install the plugin ZIP file via **Plugins > Add New > Upload Plugin**.
+1. Upload the `listonix-listing-importer-for-hivepress` folder to your `/wp-content/plugins/` directory, or install the plugin ZIP file via **Plugins > Add New > Upload Plugin**.
 2. Activate the plugin through the **Plugins** menu in WordPress.
 3. Ensure the core **HivePress** plugin is installed and activated.
 4. Navigate to **Listings > Import Listings** in your WordPress admin sidebar to start importing or exporting.
 
 == Frequently Asked Questions ==
 
-= Does this plugin require HivePress? =
-Yes. This plugin is an extension purpose-built for the HivePress directory framework and requires the core HivePress plugin to be active.
-
 = Does this plugin connect to any third-party services or APIs? =
 No. This plugin does not connect to any external tracking services, third-party SaaS platforms, or proprietary APIs. The only outbound HTTP requests made are WordPress core `download_url()` calls to retrieve media files when image URLs are explicitly included by an administrator in their uploaded CSV spreadsheet.
+
+= Does this plugin require HivePress? =
+Yes. This plugin is an extension purpose-built for the HivePress directory framework and requires the core HivePress plugin to be active.
 
 = How should multiple image URLs be formatted in my CSV? =
 Separate image URLs with commas inside the image column, like this:
@@ -114,7 +114,7 @@ Yes. Click the **"Export Listings"** tab at the top of the page. You can filter 
 == Changelog ==
 
 = 1.0.2 =
-* Renamed to CuriousWP Listing Importer for HivePress to comply with WordPress.org trademark and distinctiveness guidelines.
+* Renamed to Listonix: Listing Importer for HivePress to ensure distinctiveness and full compliance with WordPress.org guidelines.
 * Refactored internal prefixes and transient storage to prevent naming collisions.
 * Refined documentation and descriptions in compliance with WordPress repository guidelines.
 

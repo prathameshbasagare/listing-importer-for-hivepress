@@ -2,11 +2,11 @@
 /**
  * Importer Engine.
  *
- * @package CuriousWP_Listing_Importer_For_HivePress
+ * @package Listonix_Listing_Importer_For_HivePress
  * @license GPL-3.0-or-later
  */
 
-namespace CuriousWP_Listing_Importer_For_HivePress;
+namespace Listonix_Listing_Importer_For_HivePress;
 
 use HivePress\Models;
 use HivePress\Helpers as hp;
@@ -69,8 +69,8 @@ class Importer {
 
 			// Add ID field.
 			$import_fields['id'] = [
-				'label'       => __( 'ID', 'curiouswp-listing-importer-for-hivepress' ),
-				'description' => __( 'Select the ID column for updating existing listings.', 'curiouswp-listing-importer-for-hivepress' ),
+				'label'       => __( 'ID', 'listonix-listing-importer-for-hivepress' ),
+				'description' => __( 'Select the ID column for updating existing listings.', 'listonix-listing-importer-for-hivepress' ),
 				'type'        => 'id',
 				'required'    => true,
 				'_order'      => 1,
@@ -107,7 +107,7 @@ class Importer {
 
 					'user'     => [
 						'label'       => hivepress()->translator->get_string( 'user' ),
-						'description' => __( 'Accepts usernames or email addresses.', 'curiouswp-listing-importer-for-hivepress' ),
+						'description' => __( 'Accepts usernames or email addresses.', 'listonix-listing-importer-for-hivepress' ),
 						'required'    => false,
 						'_order'      => 2,
 					],
@@ -134,7 +134,7 @@ class Importer {
 		 *
 		 * @param string[] $names Attribute field names.
 		 */
-		// $extra_names = (array) apply_filters( 'curiouswp_li_import_extra_fields', [ 'google_place_id', 'google_rating' ] );
+		// $extra_names = (array) apply_filters( 'listonix_import_extra_fields', [ 'google_place_id', 'google_rating' ] );
 
 		// if ( $extra_names ) {
 		// 	$model_fields = ( new Models\Listing() )->set_id( null )->_get_fields();
@@ -176,7 +176,7 @@ class Importer {
 		if ( 'categories' === $field->get_name() ) {
 
 			// Categories are resolved by name, slug or ID rather than by option label.
-			return __( 'Accepts category names, slugs or IDs (comma-separated).', 'curiouswp-listing-importer-for-hivepress' );
+			return __( 'Accepts category names, slugs or IDs (comma-separated).', 'listonix-listing-importer-for-hivepress' );
 		}
 
 		if ( is_array( $field->get_arg( 'options' ) ) ) {
@@ -189,7 +189,7 @@ class Importer {
 
 			return sprintf(
 				/* translators: %s: list of allowed option labels. */
-				__( 'Accepts any of these values: %s.', 'curiouswp-listing-importer-for-hivepress' ),
+				__( 'Accepts any of these values: %s.', 'listonix-listing-importer-for-hivepress' ),
 				implode( ', ', $field_labels )
 			);
 		}
@@ -198,7 +198,7 @@ class Importer {
 			case 'attachment_upload':
 				return sprintf(
 					/* translators: %s: allowed file formats. */
-					__( 'Accepts URLs of these file formats: %s.', 'curiouswp-listing-importer-for-hivepress' ),
+					__( 'Accepts URLs of these file formats: %s.', 'listonix-listing-importer-for-hivepress' ),
 					strtoupper( implode( ', ', $field->get_formats() ) )
 				);
 
@@ -213,25 +213,25 @@ class Importer {
 
 				return sprintf(
 					/* translators: %s: date format string. */
-					__( 'Accepts dates in "%s" format.', 'curiouswp-listing-importer-for-hivepress' ),
+					__( 'Accepts dates in "%s" format.', 'listonix-listing-importer-for-hivepress' ),
 					$field_format
 				);
 
 			case 'embed':
-				return __( 'Accepts the embed URLs.', 'curiouswp-listing-importer-for-hivepress' );
+				return __( 'Accepts the embed URLs.', 'listonix-listing-importer-for-hivepress' );
 
 			case 'checkbox':
 				return sprintf(
 					/* translators: %s: allowed value (e.g. 1). */
-					__( 'Accepts "%s" or empty values.', 'curiouswp-listing-importer-for-hivepress' ),
+					__( 'Accepts "%s" or empty values.', 'listonix-listing-importer-for-hivepress' ),
 					1
 				);
 
 			case 'time':
-				return __( 'Accepts times in seconds.', 'curiouswp-listing-importer-for-hivepress' );
+				return __( 'Accepts times in seconds.', 'listonix-listing-importer-for-hivepress' );
 
 			case 'url':
-				return __( 'Accepts URLs.', 'curiouswp-listing-importer-for-hivepress' );
+				return __( 'Accepts URLs.', 'listonix-listing-importer-for-hivepress' );
 		}
 
 		return '';
@@ -414,7 +414,7 @@ class Importer {
 		if ( empty( $field_values['title'] ) ) {
 			return [
 				'result' => 'failed',
-				'errors' => [ __( 'Missing Title.', 'curiouswp-listing-importer-for-hivepress' ) ],
+				'errors' => [ __( 'Missing Title.', 'listonix-listing-importer-for-hivepress' ) ],
 			];
 		}
 
@@ -456,7 +456,7 @@ class Importer {
 				'result' => 'failed',
 				'errors' => [ sprintf(
 					/* translators: %d: listing ID */
-					__( 'Listing ID %d not found for update.', 'curiouswp-listing-importer-for-hivepress' ),
+					__( 'Listing ID %d not found for update.', 'listonix-listing-importer-for-hivepress' ),
 					$listing_id
 				) ],
 			];
@@ -521,7 +521,7 @@ class Importer {
 		if ( $is_new && empty( $field_values['description'] ) ) {
 			$field_values['description'] = ! empty( $field_values['title'] )
 				? sanitize_text_field( $field_values['title'] )
-				: __( 'No description provided.', 'curiouswp-listing-importer-for-hivepress' );
+				: __( 'No description provided.', 'listonix-listing-importer-for-hivepress' );
 		}
 
 		// Normalize boolean flags.
@@ -551,7 +551,7 @@ class Importer {
 			$errs = $listing->_get_errors();
 			return [
 				'result' => 'failed',
-				'errors' => [ ! empty( $errs ) ? implode( '; ', $errs ) : __( 'Failed to save listing record.', 'curiouswp-listing-importer-for-hivepress' ) ],
+				'errors' => [ ! empty( $errs ) ? implode( '; ', $errs ) : __( 'Failed to save listing record.', 'listonix-listing-importer-for-hivepress' ) ],
 			];
 		}
 
@@ -566,7 +566,7 @@ class Importer {
 				if ( is_wp_error( $att_id ) ) {
 					$listing_errors[] = sprintf(
 						/* translators: 1: url, 2: error message */
-						__( 'Image error for "%1$s": %2$s', 'curiouswp-listing-importer-for-hivepress' ),
+						__( 'Image error for "%1$s": %2$s', 'listonix-listing-importer-for-hivepress' ),
 						esc_url( $img_url ),
 						$att_id->get_error_message()
 					);
@@ -605,7 +605,7 @@ class Importer {
 				if ( is_wp_error( $att_id ) ) {
 					$listing_errors[] = sprintf(
 						/* translators: 1: file URL, 2: field label, 3: error message. */
-						__( 'Error uploading "%1$s" file for "%2$s": %3$s', 'curiouswp-listing-importer-for-hivepress' ),
+						__( 'Error uploading "%1$s" file for "%2$s": %3$s', 'listonix-listing-importer-for-hivepress' ),
 						esc_url( $file_url ),
 						$field_obj->get_label(),
 						$att_id->get_error_message()
@@ -685,14 +685,14 @@ class Importer {
 		];
 
 		if ( ! file_exists( $file_path ) || ! is_readable( $file_path ) ) {
-			$result['message'] = __( 'CSV file could not be found or read.', 'curiouswp-listing-importer-for-hivepress' );
+			$result['message'] = __( 'CSV file could not be found or read.', 'listonix-listing-importer-for-hivepress' );
 			return $result;
 		}
 
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- Native stream required for chunked fseek and fgetcsv.
 		$file = fopen( $file_path, 'r' );
 		if ( ! $file ) {
-			$result['message'] = __( 'Failed to open CSV file stream.', 'curiouswp-listing-importer-for-hivepress' );
+			$result['message'] = __( 'Failed to open CSV file stream.', 'listonix-listing-importer-for-hivepress' );
 			return $result;
 		}
 
@@ -701,7 +701,7 @@ class Importer {
 		} elseif ( ! fgetcsv( $file, 0, $delimiter, '"', '\\' ) ) {
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing CSV file pointer.
 			fclose( $file );
-			$result['message'] = __( 'CSV file header is empty or invalid.', 'curiouswp-listing-importer-for-hivepress' );
+			$result['message'] = __( 'CSV file header is empty or invalid.', 'listonix-listing-importer-for-hivepress' );
 			return $result;
 		}
 
@@ -738,7 +738,7 @@ class Importer {
 				$skip_first = false;
 				$row_result = [
 					'result' => 'failed',
-					'errors' => [ __( 'Skipped: the server stopped while importing this row (timeout or fatal error).', 'curiouswp-listing-importer-for-hivepress' ) ],
+					'errors' => [ __( 'Skipped: the server stopped while importing this row (timeout or fatal error).', 'listonix-listing-importer-for-hivepress' ) ],
 				];
 			} elseif ( empty( array_filter( $row ) ) ) {
 				// Skip completely empty lines
