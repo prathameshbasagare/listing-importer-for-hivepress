@@ -278,7 +278,6 @@ class Importer {
 
 		$columns = fgetcsv( $file, 0, $delimiter, '"', '\\' );
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing CSV file pointer.
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing CSV file pointer.
 		fclose( $file );
 
 		if ( ! is_array( $columns ) ) {
@@ -311,7 +310,6 @@ class Importer {
 			$count++;
 		}
 
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing CSV file pointer.
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing CSV file pointer.
 		fclose( $file );
 
@@ -702,8 +700,7 @@ class Importer {
 			fseek( $file, $offset );
 		} elseif ( ! fgetcsv( $file, 0, $delimiter, '"', '\\' ) ) {
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing CSV file pointer.
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing CSV file pointer.
-		fclose( $file );
+			fclose( $file );
 			$result['message'] = __( 'CSV file header is empty or invalid.', 'curiouswp-listing-importer-for-hivepress' );
 			return $result;
 		}

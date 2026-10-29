@@ -256,16 +256,34 @@ class Image_Handler {
 	 * @return int Attachment ID, or 0 if none is reusable.
 	 */
 	protected static function find_reusable_attachment( $source_hash, $post_parent ) {
-		global $wpdb;
+		$ids = get_posts( [
+			'post_type'              => 'attachment',
+			'post_status'            => 'inherit',
+			'posts_per_page'         => 50,
+			'fields'                 => 'ids',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+			'meta_query'             => [
+				'relation' => 'OR',
+				[
+					'key'     => '_curiouswp_li_source_hash',
+					'value'   => $source_hash,
+					'compare' => '=',
+				],
+				[
+					'key'     => '_hp_import_source_hash',
+					'value'   => $source_hash,
+					'compare' => '=',
+				],
+			],
+			'orderby'                => 'ID',
+			'order'                  => 'ASC',
+		] );
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-		$ids = $wpdb->get_col( $wpdb->prepare(
-			"SELECT pm.post_id FROM {$wpdb->postmeta} pm
-			INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id AND p.post_type = 'attachment'
-			WHERE pm.meta_key IN ('_curiouswp_li_source_hash', '_hp_import_source_hash') AND pm.meta_value = %s
-			ORDER BY pm.post_id ASC",
-			$source_hash
-		) );
+		if ( empty( $ids ) ) {
+			return 0;
+		}
 
 		$fallback = 0;
 

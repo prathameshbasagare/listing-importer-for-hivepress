@@ -78,6 +78,9 @@ If you export data from tools with nested or dotted column headers (such as `com
 = Does this plugin require HivePress? =
 Yes. This plugin is an extension purpose-built for the HivePress directory framework and requires the core HivePress plugin to be active.
 
+= Does this plugin connect to any third-party services or APIs? =
+No. This plugin does not connect to any external tracking services, third-party SaaS platforms, or proprietary APIs. The only outbound HTTP requests made are WordPress core `download_url()` calls to retrieve media files when image URLs are explicitly included by an administrator in their uploaded CSV spreadsheet.
+
 = How should multiple image URLs be formatted in my CSV? =
 Separate image URLs with commas inside the image column, like this:
 `https://example.com/photo1.jpg, https://example.com/photo2.webp, https://example.com/photo3.png`
